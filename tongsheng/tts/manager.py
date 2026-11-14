@@ -230,7 +230,9 @@ class TTSRuntime:
                 # REC renders the whole text in one call and sounds best; LIVE
                 # keeps that context by rendering 1-2 sentences per call, then
                 # plays them back to back while the next chunk is generated.
-                sentences = _merge_for_live(sentences, int(cfg_tts.live_chunk_chars))
+                sentences = _merge_for_live(
+                    sentences, int(cfg_tts.live_first_chunk_chars),
+                    int(cfg_tts.live_chunk_chars))
                 streaming = bool(cfg_tts.live_fragments)
                 gap_ms = max(0, int(cfg_tts.sentence_gap_ms))
                 gap = np.zeros(int(tier.sample_rate * gap_ms / 1000.0), dtype=np.float32)
@@ -240,10 +242,12 @@ class TTSRuntime:
                     if on_sentence:
                         on_sentence(sentence)
                     if not streaming:
-                        # Project A strategy: render the whole sentence first,
-                        # fade the edges, breathe between sentences, then play.
+                        # Project A strategy: render the whole chunk first,
+                        # fade the edges, breathe between chunks, then play.
+                        chunk_t0 = time.perf_counter()
                         audio, sr = self._render_sentence(
                             engine, sentence, common, lang, tier, cfg_tts)
+                        render_s = time.perf_counter() - chunk_t0
                         if audio.size == 0:
                             continue
                         if sr != tier.sample_rate:
@@ -256,6 +260,11 @@ class TTSRuntime:
                             player.push(gap, tier.sample_rate)
                             total_samples += gap.size
                         produced_sr = tier.sample_rate
+                        if sr and render_s:
+                            log.info("live chunk %d: %d chars -> %.2fs audio in "
+                                     "%.2fs render (%.2fx realtime)",
+                                     index + 1, len(sentence), audio.size / sr,
+                                     render_s, (audio.size / sr) / max(render_s, 1e-3))
                         player.push(audio, produced_sr)
                         total_samples += audio.size
                         continue
@@ -342,17 +351,26 @@ class TTSRuntime:
         return wavmod.write_wav(folder / name, audio, sr)
 
 
-def _merge_for_live(sentences: list[str], limit: int) -> list[str]:
-    """Group short sentences so each TTS call has enough prosody context."""
-    if limit <= 0 or len(sentences) <= 1:
+def _merge_for_live(sentences: list[str], first_limit: int,
+                    rest_limit: int | None = None) -> list[str]:
+    """Short first chunk (fast start), long later chunks (better prosody).
+
+    The first chunk only has to be rendered before playback can start; every
+    following chunk is generated while the previous one plays, so it can afford
+    two to four sentences of context and one shared prompt pass.
+    """
+    rest = max(first_limit, int(rest_limit or first_limit))
+    if len(sentences) <= 1:
         return sentences
     merged: list[str] = []
     current = ""
+    limit = first_limit
     for sentence in sentences:
         candidate = (current + sentence) if current else sentence
         if current and len(candidate) > limit:
             merged.append(current)
             current = sentence
+            limit = rest
         else:
             current = candidate
     if current:

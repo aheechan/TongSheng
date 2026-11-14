@@ -189,9 +189,9 @@ class TTSConfig:
     fade_out_ms: float = 25.0
     max_sec_per_char: float = 0.55     # runaway-sentence guard (project A)
     retry_bad_sentence: bool = True    # retry quiet / over-long renders
-    live_chunk_chars: int = 32         # LIVE renders 1-2 sentences per call so the
-                                       # prosody model keeps context (REC does the
-                                       # whole text at once and sounds smooth)
+    live_first_chunk_chars: int = 24   # first chunk stays short: earliest audio
+    live_chunk_chars: int = 96         # later chunks are long: richer prosody context,
+                                       # fewer engine calls (less fixed overhead)
     keep_both_tiers_loaded: bool = False
     warmup: bool = True             # preload the selected tier at startup
     voice: str = ""                 # selected voice profile id
@@ -202,7 +202,8 @@ class TTSConfig:
                                     # sentence first, smooth playback
     tiers: dict[str, TierConfig] = field(default_factory=lambda: {
         "live": TierConfig(version="v4", sample_rate=48000, streaming=True,
-                           fragment_interval=0.32, split_method="cut5", sample_steps=12),
+                           fragment_interval=0.32, split_method="cut5",
+                           sample_steps=12, batch_size=4),
         "rec": TierConfig(version="v4", sample_rate=48000, streaming=False,
                           fragment_interval=0.0, split_method="cut5", sample_steps=12),
     })
