@@ -100,7 +100,9 @@
 - **输入语言**：选「中文」= 用 FunASR 识别；选 `English` = 用 faster-whisper 识别，界面同步换英文，
   并在后台预热 whisper。预热失败时会自动重启程序，让新语种成为启动时唯一加载的模型。
 - **输出语言**：默认跟随输入语言自动取反（中文→英文）；也可以手动锁定任意一种。
-- **音色**：列出 `voices/` 下所有克隆音色，点击即用。
+- **音色**：列出 `voice-repository/` 下所有克隆音色，点击即用。
+- **声音模型训练**：右上角按钮打开训练/音色管理窗口（新建音色、设为默认、删除）。
+- **快捷键**：默认**左 Alt**——轻点锁定、长按说完松手（可在设置里改成右 Alt / Ctrl+Alt / Ctrl+Shift+Space）。
 
 ---
 
@@ -156,7 +158,7 @@ run.bat voices list
 run.bat train --audio D:\我的录音.wav --name 我的声音
 ```
 
-流程：切分 → 逐句 ASR 打标 → 生成 GPT-SoVITS 训练集 → LoRA 训练（默认 conservative，200 step 左右）→ 自动装进 `voices/`。
+流程：切分 → 逐句 ASR 打标 → 生成 GPT-SoVITS 训练集 → LoRA 训练（默认 conservative，200 step 左右）→ 自动装进 `voice-repository/`。
 训练期间会释放 ASR/TTS 占用的显存；24 GB 显卡上 200 step 约 10–15 分钟。
 
 > 训练实现复用项目 A 的 `app.core.train`（数据集切分、LoRA 训练、自检都是同一套代码），TongSheng 只负责输入输出和成品安装。
@@ -164,7 +166,7 @@ run.bat train --audio D:\我的录音.wav --name 我的声音
 ### 音色目录结构
 
 ```
-voices/<id>/
+voice-repository/<id>/
 ├─ profile.json          # 名称、权重、参考音频文本
 ├─ reference.wav/.txt     # 零样本/流式用的参考音频
 └─ checkpoints/          # s1 GPT ckpt + SoVITS LoRA
@@ -183,9 +185,12 @@ LIVE 档找不到匹配的 v3 LoRA 时，会自动用 v3 底模 + 参考音频�
 | `ui.language` | `zh` | 输入语言 + 界面语言（`zh` / `en`） |
 | `translate.target_language` | `""` | 输出语言；留空 = 自动取输入的反向。可选 `zh/en/ja/ko/es/fr/de/ru/pt/it/ar/vi/th/id/tr` |
 | `ui.mode` | `live` | 输出品质档 |
-| `ui.hotkey` | `ctrl+alt` | 按住说话组合键；也可 `ctrl+shift+space` |
-| `ui.hotkey_mode` | `hold` | `hold` 按住说 / `toggle` 按一下开始 |
-| `tts.speed` | `1.0` | 朗读语速 |
+| `ui.hotkey` | `lalt` | 快捷键：`lalt` / `ralt` / `alt` / `ctrl+alt` / `ctrl+shift+space` |
+| `ui.hotkey_mode` | `smart` | `smart` 轻点锁定+长按说话 / `hold` 按住 / `toggle` 按一下 |
+| `tts.speed` | `1.0` | 朗读语速（主界面滑块） |
+| `tts.emotion` | `natural` | 默认情绪：natural/gentle/lively/calm/serious |
+| `tts.live_volume` | `1.0` | LIVE 档输出音量（0–1.5） |
+| `audio.output_device` | `null` | 声音输出通路（设备序号） |
 | `translate.style` | `daily` | `daily` / `live` / `business` / `subtitle` |
 | `pipeline.inject_text` | `false` | 译文同时粘贴到焦点窗口 |
 | `audio.input_device` | `null` | 麦克风名片段或序号 |
@@ -209,7 +214,7 @@ TongSheng/
 │  ├─ service.py   采集→识别→纠错→翻译→合成 的编排
 │  ├─ tray.py      系统托盘（品质档 / 语言 / 音色）
 │  └─ app.py       启动、单实例、自检
-├─ voices/         克隆音色（不入库）
+├─ voice-repository/  克隆音色（不入库）
 ├─ results/        历史与录音产物
 ├─ tests/          无 GPU 也能跑的单元测试
 └─ config.example.yaml

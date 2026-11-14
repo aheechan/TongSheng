@@ -161,7 +161,8 @@ class VoiceStore:
         return folder
 
     # -- import ---------------------------------------------------------
-    def import_private_voice(self, source: str | Path, voice_id: str | None = None) -> VoiceProfile:
+    def import_private_voice(self, source: str | Path, voice_id: str | None = None,
+                             display_name: str = "") -> VoiceProfile:
         """Copy a PrivateVoice character folder into the TongSheng voice store."""
         src = Path(source)
         if not src.is_dir():
@@ -173,7 +174,7 @@ class VoiceStore:
                 data = json.loads(cfg_path.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
                 data = {}
-        name = str(data.get("name") or src.name)
+        name = display_name or str(data.get("name") or src.name)
         vid = voice_id or f"{slugify(name)}-{_short_hash(str(src))}"
         dest = self.root / vid
         dest.mkdir(parents=True, exist_ok=True)
@@ -185,20 +186,23 @@ class VoiceStore:
                 shutil.copy2(candidate, dest / ref_name)
                 break
         text = ""
-        ref_txt = src / "reference.txt"
-        if ref_txt.exists():
-            text = ref_txt.read_text(encoding="utf-8", errors="replace").strip()
-            (dest / "reference.txt").write_text(text + "\n", encoding="utf-8")
+        for ref_txt in (src / "reference.txt", src / "reference(1).txt"):
+            if ref_txt.exists():
+                text = ref_txt.read_text(encoding="utf-8", errors="replace").strip()
+                (dest / "reference.txt").write_text(text + "\n", encoding="utf-8")
+                break
 
-        # checkpoints: keep the folder structure, prefer relative paths
+        # checkpoints: skip "(1)" style duplicates that cloud sync leaves behind
         ckpt_dir = src / "checkpoints"
         gpt_rel = sovits_live = sovits_rec = ""
         if ckpt_dir.is_dir():
             target = dest / "checkpoints"
             target.mkdir(parents=True, exist_ok=True)
-            for item in ckpt_dir.iterdir():
-                if item.is_file() and item.suffix in (".pth", ".ckpt"):
-                    shutil.copy2(item, target / item.name)
+            files = [item for item in ckpt_dir.iterdir()
+                     if item.is_file() and item.suffix in (".pth", ".ckpt")]
+            primary = [item for item in files if not _is_duplicate(item.name)] or files
+            for item in primary:
+                shutil.copy2(item, target / item.name)
             for item in sorted(target.iterdir()):
                 rel = f"checkpoints/{item.name}"
                 if item.suffix == ".ckpt":
@@ -237,6 +241,13 @@ def slugify(value: str) -> str:
     text = unicodedata.normalize("NFKC", value or "voice").strip().lower()
     text = re.sub(r"[^\w\u4e00-\u9fff-]+", "-", text)
     return text.strip("-") or "voice"
+
+
+def _is_duplicate(name: str) -> bool:
+    """``vlab_x-e10(1).ckpt`` style copies left by sync tools."""
+    import re
+
+    return bool(re.search(r"\(\d+\)", name))
 
 
 def _short_hash(value: str) -> str:

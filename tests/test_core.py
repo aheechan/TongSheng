@@ -166,6 +166,38 @@ class HotkeyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_combo("nonsensekey")
 
+    def test_left_right_alt(self) -> None:
+        from tongsheng.hotkey import parse_combo
+
+        left = parse_combo("lalt")
+        right = parse_combo("ralt")
+        self.assertEqual(left.key, 0xA4)
+        self.assertEqual(right.key, 0xA5)
+        self.assertTrue(left.pressed({0xA4}))
+        self.assertFalse(left.pressed({0xA5}))
+        self.assertTrue(right.pressed({0xA5}))
+        # generic "alt" accepts either side
+        either = parse_combo("alt")
+        self.assertTrue(either.pressed({0xA4}))
+        self.assertTrue(either.pressed({0xA5}))
+        self.assertFalse(either.pressed({0xA2}))
+        # ctrl+alt requires one of each, not all vk variants
+        both = parse_combo("ctrl+alt")
+        self.assertTrue(both.pressed({0xA2, 0xA4}))
+        self.assertFalse(both.pressed({0xA4}))
+
+
+class EmotionTests(unittest.TestCase):
+    def test_presets(self) -> None:
+        from tongsheng.config import emotion_preset, emotions
+
+        self.assertEqual(len(emotions("zh")), 5)
+        temp, topk, speed = emotion_preset("lively")
+        self.assertGreater(temp, 0.6)
+        self.assertGreater(topk, 5)
+        self.assertGreater(speed, 1.0)
+        self.assertEqual(emotion_preset("unknown"), emotion_preset("natural"))
+
 
 class HistoryTests(unittest.TestCase):
     def test_jsonl_roundtrip(self) -> None:

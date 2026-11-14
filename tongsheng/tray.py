@@ -66,45 +66,85 @@ class Bridge(QObject):
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, config: AppConfig, voices: list[Any], parent=None) -> None:
+    """Only the things that are not already on the main window."""
+
+    HOTKEYS = [
+        ("lalt", "左 Alt / Left Alt"),
+        ("ralt", "右 Alt / Right Alt"),
+        ("alt", "Alt（左右均可）"),
+        ("ctrl+alt", "Ctrl + Alt"),
+        ("ctrl+shift+space", "Ctrl + Shift + Space"),
+        ("ctrl+q", "Ctrl + Q"),
+    ]
+
+    def __init__(self, config: AppConfig, voices: list[Any] | None = None, parent=None) -> None:
         super().__init__(parent)
+        from .audio.capture import list_input_devices
+        from .audio.player import list_output_devices
+        from .config import emotions
+
         self.config = config
         self.setWindowTitle(t("settings.title"))
-        self.setMinimumWidth(460)
+        self.setMinimumWidth(520)
+        from .ui import palette
+
+        self.setStyleSheet(palette.STYLESHEET)
         layout = QVBoxLayout(self)
         form = QFormLayout()
 
-        self.language = QComboBox()
-        for code, label in LANGUAGES.items():
-            self.language.addItem(label, code)
-        index = self.language.findData(config.language)
-        self.language.setCurrentIndex(max(0, index))
-        form.addRow(t("settings.input_language"), self.language)
+        # -- hotkey ------------------------------------------------------
+        self.hotkey = QComboBox()
+        for code, label in self.HOTKEYS:
+            self.hotkey.addItem(label, code)
+        index = self.hotkey.findData(config.ui.hotkey)
+        if index < 0:
+            self.hotkey.addItem(config.ui.hotkey, config.ui.hotkey)
+            index = self.hotkey.count() - 1
+        self.hotkey.setCurrentIndex(index)
+        form.addRow(t("settings.hotkey"), self.hotkey)
 
-        self.output_language = QComboBox()
-        for code, label, speaks in output_languages(config.language):
-            text = label if speaks else f"{label} · {t('menu.text_only')}"
-            self.output_language.addItem(text, code)
-        index = self.output_language.findData(config.target_language)
-        self.output_language.setCurrentIndex(max(0, index))
-        form.addRow(t("settings.output_language"), self.output_language)
+        self.hotkey_mode = QComboBox()
+        for code, label in (("smart", t("settings.hotkey.smart")),
+                            ("hold", t("settings.hotkey.hold")),
+                            ("toggle", t("settings.hotkey.toggle"))):
+            self.hotkey_mode.addItem(label, code)
+        index = self.hotkey_mode.findData(config.ui.hotkey_mode)
+        self.hotkey_mode.setCurrentIndex(max(0, index))
+        form.addRow(t("settings.hotkey_mode"), self.hotkey_mode)
 
-        self.voice = QComboBox()
-        self.voice.addItem(t("voice.none"), "")
-        for voice in voices:
-            self.voice.addItem(voice.name, voice.id)
-        index = self.voice.findData(config.tts.voice)
-        self.voice.setCurrentIndex(max(0, index))
-        form.addRow(t("settings.voice"), self.voice)
+        # -- audio routing ----------------------------------------------
+        self.input_device = QComboBox()
+        self.input_device.addItem(t("settings.default_device"), None)
+        for device in list_input_devices():
+            self.input_device.addItem(device.name, device.index)
+        index = self.input_device.findData(config.audio.input_device)
+        self.input_device.setCurrentIndex(max(0, index))
+        form.addRow(t("settings.input"), self.input_device)
 
-        self.speed = QSlider(Qt.Horizontal)
-        self.speed.setRange(70, 130)
-        self.speed.setValue(int(config.tts.speed * 100))
-        self.speed_label = QLabel(f"{config.tts.speed:.2f}x")
-        self.speed.valueChanged.connect(
-            lambda value: self.speed_label.setText(f"{value / 100:.2f}x"))
-        form.addRow(t("settings.speed"), self.speed)
-        form.addRow("", self.speed_label)
+        self.output_device = QComboBox()
+        self.output_device.addItem(t("settings.default_device"), None)
+        for device_id, name in list_output_devices():
+            self.output_device.addItem(name, device_id)
+        index = self.output_device.findData(config.audio.output_device)
+        self.output_device.setCurrentIndex(max(0, index))
+        form.addRow(t("settings.output"), self.output_device)
+
+        # -- voice rendering --------------------------------------------
+        self.emotion = QComboBox()
+        for code, label in emotions(config.language):
+            self.emotion.addItem(label, code)
+        index = self.emotion.findData(config.tts.emotion)
+        self.emotion.setCurrentIndex(max(0, index))
+        form.addRow(t("settings.emotion"), self.emotion)
+
+        self.live_volume = QSlider(Qt.Horizontal)
+        self.live_volume.setRange(0, 150)
+        self.live_volume.setValue(int(float(config.tts.live_volume) * 100))
+        self.volume_label = QLabel(f"{self.live_volume.value()}%")
+        self.live_volume.valueChanged.connect(
+            lambda value: self.volume_label.setText(f"{value}%"))
+        form.addRow(t("settings.live_volume"), self.live_volume)
+        form.addRow("", self.volume_label)
 
         self.inject = QCheckBox(t("settings.inject"))
         self.inject.setChecked(config.pipeline.inject_text)
@@ -112,19 +152,24 @@ class SettingsDialog(QDialog):
 
         layout.addLayout(form)
         hint = QLabel(i18n.mode_hint(config.mode))
+        hint.setWordWrap(True)
         hint.setStyleSheet("color:#666;")
         layout.addWidget(hint)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Save).setText(t("settings.save"))
+        buttons.button(QDialogButtonBox.Cancel).setText(t("settings.cancel"))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
     def apply(self) -> None:
-        self.config.ui.language = normalize_language(self.language.currentData())
-        self.config.translate.target_language = self.output_language.currentData() or ""
-        self.config.tts.voice = self.voice.currentData() or ""
-        self.config.tts.speed = self.speed.value() / 100.0
+        self.config.ui.hotkey = self.hotkey.currentData() or "lalt"
+        self.config.ui.hotkey_mode = self.hotkey_mode.currentData() or "smart"
+        self.config.audio.input_device = self.input_device.currentData()
+        self.config.audio.output_device = self.output_device.currentData()
+        self.config.tts.emotion = self.emotion.currentData() or "natural"
+        self.config.tts.live_volume = self.live_volume.value() / 100.0
         self.config.pipeline.inject_text = self.inject.isChecked()
 
 
@@ -175,6 +220,8 @@ class TongShengTray(QObject):
         self.window = None
         self.app_argv: list[str] = []
         self._restart_guard = False
+        self._press_at = 0.0
+        self._stop_after_release = False
         self._build_menu()
         self.tray.activated.connect(self._on_tray_activated)
 
@@ -258,6 +305,10 @@ class TongShengTray(QObject):
         self.menu.addMenu(self.voice_menu)
 
         self.menu.addSeparator()
+        self.train_action = QAction(t("train.title"), self.menu)
+        self.train_action.triggered.connect(self.open_training)
+        self.menu.addAction(self.train_action)
+
         self.open_action = QAction(t("menu.open_window"), self.menu)
         self.open_action.triggered.connect(self.show_window)
         self.menu.addAction(self.open_action)
@@ -288,6 +339,7 @@ class TongShengTray(QObject):
         self.voice_menu.setTitle(t("menu.voice"))
         self.talk_action.setText("🎙 " + t("menu.start"))
         self.status_action.setText(f"{t('menu.status')} · {t('state.idle')}")
+        self.train_action.setText(t("train.title"))
         self.open_action.setText(t("menu.open_window"))
         self.settings_action.setText(t("menu.settings"))
         self.history_action.setText(t("menu.history"))
@@ -418,14 +470,38 @@ class TongShengTray(QObject):
         dialog = SettingsDialog(self.config, self.service.tts.voices())
         if dialog.exec() == QDialog.Accepted:
             dialog.apply()
-            i18n.set_language(self.config.language)
-            self.service.set_input_language(self.config.language)
-            self.service.set_output_language(self.config.translate.target_language)
-            self.service.set_voice(self.config.tts.voice)
             self._save()
+            # a changed output device needs a fresh audio stream
+            try:
+                self.service.player.close()
+                from .audio import StreamingPlayer
+
+                self.service.player = StreamingPlayer(
+                    device=self.config.audio.output_device)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("reopening output device failed: %s", exc)
+            self._install_hotkey()
             self._build_menu()
             self._retranslate()
-            self._install_hotkey()
+            if self.window is not None:
+                self.window.refresh_sliders()
+
+    def open_training(self) -> None:
+        from .ui.training import TrainingDialog
+
+        dialog = TrainingDialog(self)
+        dialog.exec()
+        self.refresh_voices()
+        if self.window is not None:
+            self.window.refresh_sliders()
+
+    def refresh_voices(self) -> None:
+        self._fill_voices()
+        if self.window is not None:
+            try:
+                self.window._fill_voices()
+            except Exception:
+                pass
 
     def _open_history(self) -> None:
         HistoryDialog(self.service.read_history(80)).exec()
@@ -496,14 +572,9 @@ class TongShengTray(QObject):
 
     def _on_status(self, message: str) -> None:
         if message == "hotkey-press":
-            if self.config.ui.hotkey_mode == "hold":
-                if self.service.begin():
-                    self.talk_action.setText("⏹ " + t("menu.stop"))
-            else:
-                self._toggle_talk()
+            self._on_hotkey_press()
         elif message == "hotkey-release":
-            if self.config.ui.hotkey_mode == "hold":
-                self.service.end()
+            self._on_hotkey_release()
         elif message == "ready":
             self._notify(t("app.name"), t("state.ready"))
         elif message.startswith("asr-warming:"):
@@ -521,6 +592,41 @@ class TongShengTray(QObject):
             self._notify(t("app.name"),
                          t("notify.text_only",
                            lang=output_language_label(code, self.config.language)))
+
+    # -- hotkey gesture (project B style: tap latches, hold talks) --------
+    def _on_hotkey_press(self) -> None:
+        import time as _time
+
+        mode = self.config.ui.hotkey_mode
+        if mode == "toggle":
+            self._toggle_talk()
+            return
+        self._press_at = _time.monotonic()
+        if self.service.state == State.LISTENING:
+            # second tap while latched → stop on release
+            self._stop_after_release = True
+            return
+        self._stop_after_release = False
+        if self.service.begin():
+            self.talk_action.setText("⏹ " + t("menu.stop"))
+
+    def _on_hotkey_release(self) -> None:
+        import time as _time
+
+        mode = self.config.ui.hotkey_mode
+        if mode == "toggle":
+            return
+        if self._stop_after_release:
+            self._stop_after_release = False
+            self.service.end()
+            self.talk_action.setText("🎙 " + t("menu.start"))
+            return
+        held_ms = (_time.monotonic() - self._press_at) * 1000.0
+        threshold = float(self.config.ui.hotkey_threshold_ms or 280)
+        if mode == "hold" or held_ms >= threshold:
+            self.service.end()
+            self.talk_action.setText("🎙 " + t("menu.start"))
+        # smart + short tap → keep recording (latched) until the next tap
 
     def _handle_asr_failure(self, message: str) -> None:
         parts = message.split(":", 2)

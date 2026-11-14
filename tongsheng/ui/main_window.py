@@ -12,8 +12,8 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
-    QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QTextEdit,
-    QVBoxLayout, QWidget,
+    QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSlider,
+    QTextEdit, QVBoxLayout, QWidget,
 )
 
 from .. import APP_NAME, __version__, i18n
@@ -92,6 +92,10 @@ class MainWindow(QWidget):
         titles.addWidget(self.title)
         titles.addWidget(self.subtitle)
         header.addLayout(titles, 1)
+        self.train_button = QPushButton()
+        self.train_button.setObjectName("ghost")
+        self.train_button.clicked.connect(self.tray.open_training)
+        header.addWidget(self.train_button)
         self.state_label = QLabel()
         self.state_label.setObjectName("state")
         self.state_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -129,6 +133,20 @@ class MainWindow(QWidget):
         self.voice_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.voice_box.currentIndexChanged.connect(self._on_voice)
         row.addWidget(self.voice_box, 1)
+        root.addLayout(row)
+
+        # speed (quick access, persists on release)
+        row, _ = self._setting_row("speed")
+        self.speed_slider = QSlider(Qt.Horizontal)
+        self.speed_slider.setRange(70, 130)
+        self.speed_slider.setValue(int(round(self.config.tts.speed * 100)))
+        self.speed_slider.valueChanged.connect(self._on_speed)
+        self.speed_slider.sliderReleased.connect(self.tray._save)
+        self.speed_value = QLabel(f"{self.config.tts.speed:.2f}x")
+        self.speed_value.setMinimumWidth(46)
+        self.speed_value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        row.addWidget(self.speed_slider, 1)
+        row.addWidget(self.speed_value)
         root.addLayout(row)
 
         self.hint = QLabel()
@@ -233,6 +251,18 @@ class MainWindow(QWidget):
         if voice_id:
             self.tray._set_voice(voice_id)
 
+    def _on_speed(self, value: int) -> None:
+        self.config.tts.speed = value / 100.0
+        self.speed_value.setText(f"{value / 100:.2f}x")
+
+    def refresh_sliders(self) -> None:
+        """Re-sync widgets after settings/training changed the config."""
+        self.speed_slider.blockSignals(True)
+        self.speed_slider.setValue(int(round(self.config.tts.speed * 100)))
+        self.speed_slider.blockSignals(False)
+        self.speed_value.setText(f"{self.config.tts.speed:.2f}x")
+        self._fill_voices()
+
     def _toggle_talk(self) -> None:
         if self.service.state == State.LISTENING:
             self.service.end()
@@ -296,7 +326,8 @@ class MainWindow(QWidget):
         for attr, key in (("quality_label", "menu.mode"),
                           ("language_label", "settings.input_language"),
                           ("output_label", "settings.output_language"),
-                          ("voice_label", "menu.voice")):
+                          ("voice_label", "menu.voice"),
+                          ("speed_label", "settings.speed")):
             label = getattr(self, attr, None)
             if label is not None:
                 label.setText(t(key))
@@ -306,6 +337,7 @@ class MainWindow(QWidget):
         self.mode_row.set_current(self.config.mode)
         self._fill_output_languages()
         self.talk_button.setText("🎙  " + t("menu.start"))
+        self.train_button.setText(t("train.title"))
         self.settings_button.setText(t("menu.settings").replace("…", ""))
         self.history_button.setText(t("menu.history").replace("…", ""))
         self.results_button.setText(t("menu.open_results"))

@@ -11,7 +11,7 @@ from typing import Callable
 import numpy as np
 
 from ..audio import StreamingPlayer, wav as wavmod
-from ..config import AppConfig
+from ..config import AppConfig, emotion_preset
 from ..logs import get_logger
 from ..paths import ModelPaths
 from ..text import detect_language, split_sentences
@@ -183,20 +183,23 @@ class TTSRuntime:
         ref_text = profile.reference_text or ""
         prompt_lang = profile.reference_lang if profile.reference_lang in ("zh", "en") else "zh"
 
+        emo_temp, emo_topk, emo_speed = emotion_preset(self.config.tts.emotion)
+        base_speed = float(self.config.tts.speed or 1.0)
         common = dict(
             ref_wav=str(ref),
             ref_text=ref_text,
             text_lang=lang,
             prompt_lang=prompt_lang,
-            speed=self.config.tts.speed,
-            temperature=self.config.tts.temperature,
-            top_k=self.config.tts.top_k,
+            speed=round(base_speed * emo_speed, 3),
+            temperature=emo_temp,
+            top_k=emo_topk,
             top_p=self.config.tts.top_p,
             repetition_penalty=self.config.tts.repetition_penalty,
             sample_steps=tier.sample_steps,
             split_method=tier.split_method,
             batch_size=tier.batch_size,
         )
+        live_gain = float(self.config.tts.live_volume or 1.0) if mode == "live" else 1.0
         start = time.perf_counter()
         total_samples = 0
         produced_sr = tier.sample_rate
@@ -225,6 +228,8 @@ class TTSRuntime:
                             break
                         if sr != tier.sample_rate:
                             chunk = wavmod.resample(chunk, sr, tier.sample_rate)
+                        if live_gain != 1.0:
+                            chunk = np.clip(chunk * live_gain, -1.0, 1.0).astype(np.float32)
                         produced_sr = tier.sample_rate
                         player.push(chunk, produced_sr)
                         total_samples += chunk.size

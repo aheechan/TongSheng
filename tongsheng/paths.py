@@ -122,7 +122,7 @@ def discover(private_voice: str | Path | None = None,
     return ModelPaths(
         gpt_sovits=gpt_sovits,
         pretrained=pretrained,
-        characters=_existing(ROOT / "voices"),
+        characters=_voice_repository(),
         asr_cache=asr_cache,
         whisper_dir=whisper_dir,
         funasr_dir=funasr_dir,
@@ -130,6 +130,21 @@ def discover(private_voice: str | Path | None = None,
         logs=ROOT / "logs",
         results=ROOT / "results",
     )
+
+
+def _voice_repository() -> Path:
+    """``voice-repository/`` is the home of every cloned voice.
+
+    Older builds used ``voices/``; if that is the only folder present we keep
+    using it until the user migrates.
+    """
+    new = ROOT / "voice-repository"
+    if new.is_dir():
+        return new
+    legacy = ROOT / "voices"
+    if legacy.is_dir():
+        return legacy
+    return new
 
 
 def resolve_llama_binary(configured: str = "llama-server") -> str:

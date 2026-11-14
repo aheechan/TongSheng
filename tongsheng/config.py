@@ -186,6 +186,8 @@ class TTSConfig:
     keep_both_tiers_loaded: bool = False
     warmup: bool = True             # preload the selected tier at startup
     voice: str = ""                 # selected voice profile id
+    emotion: str = "natural"        # default prosody preset
+    live_volume: float = 1.0        # 0.0 - 1.5, LIVE tier only
     tiers: dict[str, TierConfig] = field(default_factory=lambda: {
         "live": TierConfig(version="v3", sample_rate=24000, streaming=True,
                            fragment_interval=0.32, split_method="cut5", sample_steps=4),
@@ -195,6 +197,33 @@ class TTSConfig:
 
     def tier(self, mode: str) -> TierConfig:
         return self.tiers.get(mode) or self.tiers["live"]
+
+
+# Prosody presets. GPT-SoVITS has no true emotion conditioning, so each preset
+# shifts temperature / top_k / speed in a direction that audibly changes delivery.
+EMOTIONS: list[tuple[str, str, str, float, int, float]] = [
+    # key, zh, en, temperature, top_k, speed multiplier
+    ("natural", "自然", "Natural", 0.60, 5, 1.00),
+    ("gentle", "温柔", "Gentle", 0.50, 4, 0.96),
+    ("lively", "活泼", "Lively", 0.80, 9, 1.06),
+    ("calm", "平静", "Calm", 0.45, 4, 0.94),
+    ("serious", "严肃", "Serious", 0.40, 3, 0.98),
+]
+EMOTION_KEYS = [item[0] for item in EMOTIONS]
+
+
+def emotion_preset(key: str) -> tuple[float, int, float]:
+    for item in EMOTIONS:
+        if item[0] == key:
+            return item[3], item[4], item[5]
+    return EMOTIONS[0][3], EMOTIONS[0][4], EMOTIONS[0][5]
+
+
+def emotions(ui_language: str = "zh") -> list[tuple[str, str]]:
+    out: list[tuple[str, str]] = []
+    for key, zh, en, _t, _k, _s in EMOTIONS:
+        out.append((key, zh if normalize_language(ui_language) == "zh" else en))
+    return out
 
 
 @dataclass
@@ -242,8 +271,9 @@ class TranslateConfig:
 class UIConfig:
     language: str = "zh"            # zh | en: INPUT language (ASR) and UI language
     mode: str = "live"              # live | rec
-    hotkey: str = "ctrl+alt"        # push-to-talk chord
-    hotkey_mode: str = "hold"       # hold | toggle
+    hotkey: str = "lalt"            # lalt | ralt | alt | ctrl+alt | ctrl+shift+space …
+    hotkey_mode: str = "smart"      # smart (tap latch / hold talk) | hold | toggle
+    hotkey_threshold_ms: int = 280  # below this a tap is a toggle, above it a PTT
     start_minimized: bool = False   # False = show the control window on launch
     notify_translation: bool = True
 
@@ -308,8 +338,11 @@ class AppConfig:
         self.ui.language = normalize_language(self.ui.language)
         if self.ui.mode not in MODES:
             self.ui.mode = "live"
-        if self.ui.hotkey_mode not in ("hold", "toggle"):
-            self.ui.hotkey_mode = "hold"
+        if self.ui.hotkey_mode not in ("smart", "hold", "toggle"):
+            self.ui.hotkey_mode = "smart"
+        if self.tts.emotion not in EMOTION_KEYS:
+            self.tts.emotion = "natural"
+        self.tts.live_volume = max(0.0, min(1.5, float(self.tts.live_volume or 1.0)))
         # empty target means "auto = the other language"
         self.translate.target_language = normalize_language_output(self.translate.target_language)
         # tiers may arrive as plain dicts from YAML
@@ -371,7 +404,7 @@ class AppConfig:
         if self.paths.characters:
             found.characters = Path(self.paths.characters)
         elif found.characters is None:
-            found.characters = path_mod.ROOT / "voices"
+            found.characters = path_mod.ROOT / "voice-repository"
         if self.paths.asr_cache and self.paths.asr_cache != "auto":
             cache = Path(self.paths.asr_cache)
             found.asr_cache = cache if cache.is_dir() else None

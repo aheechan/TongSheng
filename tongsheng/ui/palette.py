@@ -80,6 +80,74 @@ QPushButton#primary:hover {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                 stop:0 {BLUE}, stop:1 {CYAN});
 }}
+QPushButton#ghost {{
+    background: transparent;
+    border: 1px solid {LINE};
+    color: {MUTED};
+    padding: 5px 12px;
+}}
+QPushButton#ghost:hover {{
+    color: {CYAN};
+    border-color: {ACCENT};
+}}
+QPushButton#danger {{
+    border-color: #5A2733;
+    color: #FF8A8A;
+}}
+QPushButton#danger:hover {{
+    background: #2A1119;
+    border-color: {ERROR};
+}}
+QFrame#voiceRow {{
+    background: {PANEL};
+    border: 1px solid {LINE};
+    border-radius: 10px;
+}}
+QLabel#voiceName {{
+    font-size: 14px;
+    font-weight: 600;
+}}
+QLabel#voiceMeta {{
+    color: {MUTED};
+    font-size: 11px;
+}}
+QTabWidget::pane {{
+    border: 1px solid {LINE};
+    border-radius: 10px;
+    top: -1px;
+}}
+QTabBar::tab {{
+    background: transparent;
+    color: {MUTED};
+    padding: 7px 18px;
+    border-bottom: 2px solid transparent;
+}}
+QTabBar::tab:selected {{
+    color: {CYAN};
+    border-bottom: 2px solid {ACCENT};
+}}
+QProgressBar {{
+    background: {PANEL};
+    border: 1px solid {LINE};
+    border-radius: 6px;
+    text-align: center;
+    color: {TEXT};
+    max-height: 14px;
+}}
+QProgressBar::chunk {{
+    background: {ACCENT};
+    border-radius: 5px;
+}}
+QLineEdit {{
+    background: {PANEL};
+    border: 1px solid {LINE};
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: {TEXT};
+}}
+QLineEdit:focus {{
+    border-color: {ACCENT};
+}}
 QComboBox {{
     background: {PANEL};
     border: 1px solid {LINE};
@@ -101,6 +169,14 @@ QTextEdit#transcript {{
     border: 1px solid {LINE};
     border-radius: 10px;
     padding: 10px;
+    color: {TEXT};
+    selection-background-color: {ACCENT};
+}}
+QPlainTextEdit {{
+    background: {PANEL};
+    border: 1px solid {LINE};
+    border-radius: 10px;
+    padding: 8px;
     color: {TEXT};
     selection-background-color: {ACCENT};
 }}

@@ -57,17 +57,16 @@ class StreamingPlayer:
             log.warning("sounddevice unavailable: %s", exc)
             return False
         try:
+            import sounddevice as sd
+
             device = self.device
             info = sd.query_devices(device, "output") if device is not None else \
                 sd.query_devices(kind="output")
             self._device_rate = int(info.get("default_samplerate") or 48000)
             blocksize = max(64, int(self._device_rate * self.blocksize_ms / 1000))
-            extra = {}
-            if hasattr(sd, "WasapiSettings"):
-                try:
-                    extra["extra_settings"] = sd.WasapiSettings(auto_convert=True)
-                except Exception:
-                    extra = {}
+            # No WASAPI auto_convert: some devices reject it outright
+            # (PaErrorCode -9984). We resample ourselves, so plain shared mode
+            # works everywhere.
             self._stream = sd.OutputStream(
                 samplerate=self._device_rate,
                 channels=1,
@@ -75,14 +74,27 @@ class StreamingPlayer:
                 device=device,
                 blocksize=blocksize,
                 callback=self._callback,
-                **extra,
             )
             self._stream.start()
             return True
         except Exception as exc:  # noqa: BLE001
             log.warning("cannot open output stream: %s", exc)
             self._stream = None
-            return False
+            # last resort: let PortAudio pick everything for us
+            try:
+                import sounddevice as sd
+
+                self._device_rate = 44100 if self._device_rate not in (44100, 48000) else self._device_rate
+                self._stream = sd.OutputStream(
+                    samplerate=self._device_rate, channels=1, dtype="float32",
+                    callback=self._callback)
+                self._stream.start()
+                log.info("output stream opened with fallback settings")
+                return True
+            except Exception as exc2:  # noqa: BLE001
+                log.warning("fallback output stream failed: %s", exc2)
+                self._stream = None
+                return False
 
     def _callback(self, outdata, frames, _time, _status):  # noqa: ANN001
         outdata.fill(0)

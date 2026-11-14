@@ -24,15 +24,18 @@ WM_SYSKEYUP = 0x0105
 LLKHF_INJECTED = 0x10
 
 MODIFIERS = {
-    "ctrl": {0x11, 0xA2, 0xA3},
-    "alt": {0x12, 0xA4, 0xA5},
-    "shift": {0x10, 0xA0, 0xA1},
+    "ctrl": {0xA2, 0xA3},      # left / right control
+    "alt": {0xA4, 0xA5},       # left / right alt
+    "shift": {0xA0, 0xA1},
     "win": {0x5B, 0x5C},
 }
 
 VK_NAMES = {
     "space": 0x20, "enter": 0x0D, "tab": 0x09, "esc": 0x1B,
     "capslock": 0x14, "`:": 0xC0, "~": 0xC0,
+    # side-specific modifiers, usable as the main key (project B style)
+    "lalt": 0xA4, "ralt": 0xA5, "lctrl": 0xA2, "rctrl": 0xA3,
+    "lshift": 0xA0, "rshift": 0xA1,
 }
 for _i in range(1, 25):
     VK_NAMES[f"f{_i}"] = 0x6F + _i
@@ -40,6 +43,18 @@ for _c in "abcdefghijklmnopqrstuvwxyz":
     VK_NAMES[_c] = ord(_c.upper())
 for _c in "0123456789":
     VK_NAMES[_c] = ord(_c)
+
+
+def normalise_vk(vk: int, flags: int) -> int:
+    """Map generic modifier VKs to left/right specific ones."""
+    extended = bool(flags & 0x01)  # LLKHF_EXTENDED
+    if vk == 0x12:
+        return 0xA5 if extended else 0xA4
+    if vk == 0x11:
+        return 0xA3 if extended else 0xA2
+    if vk == 0x10:
+        return 0xA1 if extended else 0xA0
+    return vk
 
 
 @dataclass
@@ -55,11 +70,19 @@ class Combo:
             vks |= MODIFIERS[name]
         return vks
 
+    def pressed(self, down: set[int]) -> bool:
+        for name in self.modifiers:
+            if not (MODIFIERS[name] & down):
+                return False
+        if self.key is not None and self.key not in down:
+            return False
+        return True
+
 
 def parse_combo(text: str) -> Combo:
     raw = (text or "").strip().lower().replace(" ", "")
     if not raw:
-        raw = "ctrl+alt"
+        raw = "lalt"
     parts = [p for p in raw.split("+") if p]
     combo = Combo(text="+".join(parts))
     for part in parts:
@@ -96,12 +119,7 @@ class HotkeyListener:
 
     # -- state machine --------------------------------------------------
     def _is_pressed(self) -> bool:
-        needed = self.combo.modifier_vks
-        if not needed.issubset(self._down):
-            return False
-        if self.combo.key is not None and self.combo.key not in self._down:
-            return False
-        return True
+        return self.combo.pressed(self._down)
 
     def _handle(self, vk: int, is_down: bool) -> None:
         if is_down:
@@ -163,10 +181,11 @@ class HotkeyListener:
             if n_code == 0:
                 data = ctypes.cast(l_param, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
                 if not (data.flags & LLKHF_INJECTED):
+                    vk = normalise_vk(int(data.vkCode), int(data.flags))
                     if w_param in (WM_KEYDOWN, WM_SYSKEYDOWN):
-                        self._handle(int(data.vkCode), True)
+                        self._handle(vk, True)
                     elif w_param in (WM_KEYUP, WM_SYSKEYUP):
-                        self._handle(int(data.vkCode), False)
+                        self._handle(vk, False)
             return user32.CallNextHookEx(None, n_code, w_param, l_param)
 
         self._proc = HOOKPROC(callback)

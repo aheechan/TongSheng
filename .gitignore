@@ -1,4 +1,4 @@
-# ---------- python ----------
+﻿# ---------- python ----------
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -15,8 +15,8 @@ venv/
 config.yaml
 logs/
 results/
-voices/*/
-!voices/README.md
+voice-repository/*/
+!voice-repository/README.md
 *.wav
 *.log
 .tmp/

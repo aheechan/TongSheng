@@ -155,6 +155,35 @@ class TongShengService:
                 max_tokens=cfg.translator.max_tokens,
                 style=self.config.translate.style)
 
+    # -- GPU handover (training needs the VRAM) ---------------------------
+    def pause_models(self) -> None:
+        """Unload ASR/TTS before a training run so it gets the whole GPU."""
+        log.info("pausing models for training")
+        try:
+            self.tts.unload()
+        except Exception:
+            pass
+        for engine in self._engines.values():
+            try:
+                engine.close()
+            except Exception:
+                pass
+        self._engines.clear()
+        self._asr_ready.clear()
+
+    def resume_models(self) -> None:
+        language = self.config.language
+        try:
+            self.asr_engine(language).warmup()
+            self._asr_ready.add(language)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("ASR reload after training failed: %s", exc)
+        if self.config.tts.warmup:
+            try:
+                self.tts.warmup(self.config.mode)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("TTS reload after training failed: %s", exc)
+
     def shutdown(self) -> None:
         self.cancel()
         try:
