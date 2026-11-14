@@ -38,6 +38,8 @@ def detect_checkpoint_version(repo: str | Path | None, checkpoint: str | Path) -
     """Read the SoVITS version from the checkpoint header (cached).
 
     Falls back to a filename guess when GPT-SoVITS is not importable yet.
+    The upstream package computes some paths from the *current directory* at
+    import time, so we chdir into the repo first (and stay there).
     """
     path = str(checkpoint)
     if path in _VERSION_CACHE:
@@ -45,6 +47,10 @@ def detect_checkpoint_version(repo: str | Path | None, checkpoint: str | Path) -
     version = ""
     if repo is not None and Path(path).exists():
         root = Path(repo)
+        try:
+            os.chdir(root)
+        except OSError:
+            pass
         for entry in (str(root), str(root / "GPT_SoVITS")):
             if entry not in sys.path:
                 sys.path.insert(0, entry)

@@ -166,7 +166,8 @@ LIVE 档找不到匹配的 v3 LoRA 时，会自动用 v3 底模 + 参考音频�
 | `pipeline.inject_text` | `false` | 译文同时粘贴到焦点窗口 |
 | `audio.input_device` | `null` | 麦克风名片段或序号 |
 
-配置文件的查找顺序：`--config` 参数 → 项目根 `config.yaml` → `%APPDATA%\TongSheng\config.yaml` → 内置示例。
+配置文件的查找顺序：`--config` 参数 → 项目根 `config.yaml` → 内置 `config.example.yaml` 默认值。
+首次在托盘里改设置时会自动生成 `config.yaml`。
 
 ---
 

@@ -332,12 +332,8 @@ def default_config_path() -> Path:
     override = os.environ.get("TONGSHENG_CONFIG")
     if override:
         return Path(override)
-    local = path_mod.ROOT / "config.yaml"
-    if local.exists():
-        return local
-    appdata = os.environ.get("APPDATA")
-    if appdata:
-        return Path(appdata) / "TongSheng" / "config.yaml"
+    # portable first: keep the config next to the project so a copy of the
+    # folder carries its settings (and the README stays accurate)
     return path_mod.ROOT / "config.yaml"
 
 

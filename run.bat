@@ -7,12 +7,14 @@ cd /d "%~dp0"
 
 if defined TONGSHENG_PYTHON (
   set "PY=%TONGSHENG_PYTHON%"
+) else if exist "..\PrivateVoice\dist\PrivateVoice_Ahee52\runtime\python.exe" (
+  set "PY=..\PrivateVoice\dist\PrivateVoice_Ahee52\runtime\python.exe"
 ) else if exist "C:\Local Repositories\PrivateVoice\dist\PrivateVoice_Ahee52\runtime\python.exe" (
   set "PY=C:\Local Repositories\PrivateVoice\dist\PrivateVoice_Ahee52\runtime\python.exe"
 ) else (
   set "PY=python"
 )
 
-"%PY%" -c "import sys; sys.path.insert(0, r'%~dp0'); from tongsheng.__main__ import main; raise SystemExit(main())" %*
+"%PY%" "tools\dev_run.py" %*
 if errorlevel 1 pause
 endlocal
