@@ -17,7 +17,8 @@ from typing import Any, Callable
 
 from .asr import ASREngine, create_engine, engine_kind_for_language
 from .audio import Recorder, StreamingPlayer
-from .config import AppConfig, normalize_language
+from .config import (AppConfig, normalize_language, normalize_language_output,
+                     other_language, speaks_target)
 from .correct import Corrector, NullCorrector
 from .llm import ChatClient, ServerManager
 from .llm.servers import ServerManager as _ServerManager
@@ -51,6 +52,7 @@ class TurnResult:
     tts_ms: float = 0.0
     error: str = ""
     audio_path: str = ""
+    spoken: bool = True
 
     def as_record(self) -> dict[str, Any]:
         data = asdict(self)
@@ -75,6 +77,8 @@ class TongShengService:
         self._lock = threading.Lock()
         self._worker: threading.Thread | None = None
         self._engines: dict[str, ASREngine] = {}
+        self._asr_ready: set[str] = set()
+        self._asr_failed: set[str] = set()
         self._servers: ServerManager | None = None
         self._corrector: Corrector | NullCorrector = NullCorrector()
         self._translator: Translator | None = None
@@ -119,7 +123,10 @@ class TongShengService:
         self._build_pipeline()
         if self.config.asr.warmup:
             try:
-                self.asr_engine().warmup()
+                language = self.config.language
+                self.asr_engine(language).warmup()
+                self._asr_ready.add(language)
+                self.on_status(f"asr-ready:{language}")
             except Exception as exc:  # noqa: BLE001
                 log.warning("ASR warmup failed: %s", exc)
         if self.config.tts.warmup:
@@ -179,19 +186,41 @@ class TongShengService:
         return engine
 
     # -- settings -------------------------------------------------------
-    def set_language(self, language: str) -> None:
+    def set_input_language(self, language: str) -> None:
+        """Switch ASR language (and the UI language) and preload that model."""
         lang = normalize_language(language)
-        if lang == self.config.language:
-            return
+        changed = lang != self.config.language
         self.config.ui.language = lang
-        for key, engine in list(self._engines.items()):
-            if not key.startswith(lang + ":"):
-                try:
-                    engine.close()
-                except Exception:
-                    pass
-                self._engines.pop(key, None)
-        self.on_status(f"language: {lang}")
+        if self.config.translate.target_language in ("", other_language(lang)):
+            # keep "auto" pointing at the opposite language
+            pass
+        self.on_status(f"input-language:{lang}")
+        if not changed and lang in self._asr_ready:
+            return
+        threading.Thread(target=self._warm_asr, args=(lang,),
+                         name=f"ts-asr-{lang}", daemon=True).start()
+
+    # kept for older call sites
+    set_language = set_input_language
+
+    def set_output_language(self, code: str) -> None:
+        code = normalize_language_output(code)
+        self.config.translate.target_language = code
+        self.on_status(f"output-language:{code or 'auto'}")
+
+    def _warm_asr(self, lang: str) -> None:
+        self.on_status(f"asr-warming:{lang}")
+        try:
+            engine = self.asr_engine(lang)
+            started = time.perf_counter()
+            engine.warmup()
+            self._asr_ready.add(lang)
+            log.info("ASR %s warmed in %.1fs", lang, time.perf_counter() - started)
+            self.on_status(f"asr-ready:{lang}")
+        except Exception as exc:  # noqa: BLE001
+            log.exception("warming ASR %s failed", lang)
+            self._asr_failed.add(lang)
+            self.on_status(f"asr-failed:{lang}:{exc}")
 
     def set_mode(self, mode: str) -> None:
         if mode not in ("live", "rec"):
@@ -295,15 +324,22 @@ class TongShengService:
             result.translation = translation
             result.translate_ms = (time.perf_counter() - translate_start) * 1000.0
 
-            self._set_state(State.SPEAKING, "speak")
-            tts_start = time.perf_counter()
-            speech = self.tts.speak(translation, cfg.mode, self.player,
-                                    text_lang=target)
-            result.tts_ms = (time.perf_counter() - tts_start) * 1000.0
-            if speech.error and not result.error:
-                result.error = speech.error
-            if speech.path is not None:
-                result.audio_path = str(speech.path)
+            if speaks_target(target):
+                self._set_state(State.SPEAKING, "speak")
+                tts_start = time.perf_counter()
+                speech = self.tts.speak(translation, cfg.mode, self.player,
+                                        text_lang=target)
+                result.tts_ms = (time.perf_counter() - tts_start) * 1000.0
+                if speech.error and not result.error:
+                    result.error = speech.error
+                if speech.path is not None:
+                    result.audio_path = str(speech.path)
+            else:
+                # GPT-SoVITS cannot voice this language yet: keep the text,
+                # skip the speech so nobody hears a mispronounced sentence.
+                result.spoken = False
+                self.on_status(f"text-only:{target}")
+                log.info("target %s has no TTS voice; text only", target)
 
             if cfg.pipeline.inject_text:
                 try:

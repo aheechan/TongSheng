@@ -72,6 +72,7 @@ def run() -> int:
         return 0
 
     tray = TongShengTray(app, config, models)
+    tray.app_argv = list(sys.argv)
 
     from .ui.main_window import MainWindow
 

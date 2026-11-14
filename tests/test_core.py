@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tongsheng.config import AppConfig, normalize_language, other_language  # noqa: E402
+from tongsheng.config import (AppConfig, normalize_language, other_language,
+                              output_language_prompt_name, output_languages,
+                              speaks_target, OUTPUT_LANGUAGE_CODES)  # noqa: E402
 from tongsheng.text import detect_language, split_sentences  # noqa: E402
 from tongsheng.tts.voices import VoiceProfile, VoiceStore  # noqa: E402
 
@@ -54,6 +56,33 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.tts.tiers["live"].sample_rate, 24000)
         self.assertEqual(cfg.tiers["rec"].version if hasattr(cfg, "tiers") else
                          cfg.tts.tiers["rec"].version, "v4")
+
+    def test_output_language_catalog(self) -> None:
+        self.assertEqual(len(OUTPUT_LANGUAGE_CODES), 15)
+        self.assertIn("ja", OUTPUT_LANGUAGE_CODES)
+        self.assertTrue(speaks_target("ja"))
+        self.assertTrue(speaks_target("ko"))
+        self.assertFalse(speaks_target("es"))
+        self.assertEqual(output_language_prompt_name("ja"), "Japanese (日本語)")
+        labels = output_languages("zh")
+        self.assertEqual(len(labels), 15)
+        self.assertIn("Español", labels[4][1])
+
+    def test_explicit_output_language_wins(self) -> None:
+        cfg = AppConfig()
+        cfg.translate.target_language = "ja"
+        cfg.normalize()
+        self.assertEqual(cfg.target_language, "ja")
+        cfg.translate.target_language = ""
+        cfg.normalize()
+        self.assertEqual(cfg.target_language, "en")
+
+    def test_unknown_output_language_falls_back_to_auto(self) -> None:
+        cfg = AppConfig()
+        cfg.translate.target_language = "klingon"
+        cfg.normalize()
+        self.assertEqual(cfg.translate.target_language, "")
+        self.assertEqual(cfg.target_language, "en")
 
 
 class TextTests(unittest.TestCase):

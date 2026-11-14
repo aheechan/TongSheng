@@ -9,7 +9,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from ..config import LANGUAGE_NAMES_EN, normalize_language
+from ..config import (LANGUAGE_NAMES_EN, normalize_language,
+                      normalize_language_output, output_language_prompt_name)
 from ..llm.client import ChatClient, LLMError
 
 SYSTEM_PROMPT_ZH = """你是口译员，不是在翻译文件。把用户的口语翻成目标语言，只输出译文本身。
@@ -54,7 +55,8 @@ class Translator:
                        glossary: dict[str, str] | None = None) -> list[dict[str, str]]:
         style_map = STYLE_PRESETS.get(self.style, STYLE_PRESETS["daily"])
         style_text = style_map.get(source_lang, style_map["zh"])
-        target = LANGUAGE_NAMES_EN.get(normalize_language(target_lang), target_lang)
+        target = output_language_prompt_name(normalize_language_output(target_lang)) \
+            or target_lang
         parts = [f"目标语言 / Target language：{target}", f"风格 / Style：{style_text}"]
         if glossary:
             parts.append("术语 / Glossary：\n" + "\n".join(
@@ -80,7 +82,7 @@ class Translator:
         source = (text or "").strip()
         if not source:
             return ""
-        target = normalize_language(target_lang)
+        target = normalize_language_output(target_lang) or normalize_language(target_lang)
         if target == normalize_language(source_lang):
             return source
         messages = self.build_messages(source, target, source_lang, context, glossary)

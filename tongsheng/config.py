@@ -23,6 +23,79 @@ from . import paths as path_mod
 LANGUAGES: dict[str, str] = {"zh": "中文", "en": "English"}
 LANGUAGE_NAMES_EN: dict[str, str] = {"zh": "Chinese", "en": "English"}
 
+# Everything Index-Translate can output. The last column says whether the
+# cloned voice can actually speak it (GPT-SoVITS front-ends: zh/en/ja/ko/yue).
+OUTPUT_LANGUAGES: list[tuple[str, str, str, bool]] = [
+    ("zh", "中文", "Chinese", True),
+    ("en", "English", "English", True),
+    ("ja", "日本語", "Japanese", True),
+    ("ko", "한국어", "Korean", True),
+    ("es", "Español", "Spanish", False),
+    ("fr", "Français", "French", False),
+    ("de", "Deutsch", "German", False),
+    ("ru", "Русский", "Russian", False),
+    ("pt", "Português", "Portuguese", False),
+    ("it", "Italiano", "Italian", False),
+    ("ar", "العربية", "Arabic", False),
+    ("vi", "Tiếng Việt", "Vietnamese", False),
+    ("th", "ไทย", "Thai", False),
+    ("id", "Bahasa Indonesia", "Indonesian", False),
+    ("tr", "Türkçe", "Turkish", False),
+]
+OUTPUT_LANGUAGE_CODES: list[str] = [code for code, _n, _e, _s in OUTPUT_LANGUAGES]
+TTS_LANGUAGES: set[str] = {"zh", "en", "ja", "ko", "yue"}
+
+
+def output_languages(ui_language: str = "zh") -> list[tuple[str, str, bool]]:
+    """(code, label, speaks) list for the UI, native names included."""
+    ui_language = normalize_language(ui_language)
+    out: list[tuple[str, str, bool]] = []
+    for code, native, english, speaks in OUTPUT_LANGUAGES:
+        if native == english:
+            label = native
+        elif ui_language == "zh":
+            label = f"{native} ({english})"
+        else:
+            label = f"{english} ({native})"
+        out.append((code, label, speaks))
+    return out
+
+
+def output_language_label(code: str, ui_language: str = "zh") -> str:
+    for item_code, label, _speaks in output_languages(ui_language):
+        if item_code == code:
+            return label
+    return code
+
+
+def output_language_prompt_name(code: str) -> str:
+    """Name handed to the translation prompt (never a bare code)."""
+    for item_code, native, english, _speaks in OUTPUT_LANGUAGES:
+        if item_code == code:
+            return english if native == english else f"{english} ({native})"
+    return code
+
+
+def speaks_target(code: str) -> bool:
+    return normalize_language_output(code) in TTS_LANGUAGES
+
+
+def normalize_language_output(code: str | None) -> str:
+    """Accept any of the 15 output languages; empty means "auto"."""
+    raw = (code or "").strip().lower()
+    if not raw:
+        return ""
+    aliases = {"cn": "zh", "zh-cn": "zh", "chinese": "zh", "中文": "zh",
+               "english": "en", "英文": "en", "英语": "en",
+               "japanese": "ja", "日语": "ja", "日本語": "ja",
+               "korean": "ko", "韩语": "ko", "한국어": "ko",
+               "spanish": "es", "español": "es", "french": "fr", "français": "fr",
+               "german": "de", "deutsch": "de", "russian": "ru", "русский": "ru",
+               "portuguese": "pt", "italian": "it", "arabic": "ar",
+               "vietnamese": "vi", "thai": "th", "indonesian": "id", "turkish": "tr"}
+    raw = aliases.get(raw, raw)
+    return raw if raw in OUTPUT_LANGUAGE_CODES else ""
+
 MODES: tuple[str, str] = ("live", "rec")
 MODE_LABELS: dict[str, dict[str, str]] = {
     "live": {"zh": "同声传译（LIVE）", "en": "Live interpreting (LIVE)"},
@@ -162,11 +235,12 @@ class TranslateConfig:
     correct: bool = True
     max_edit_ratio: float = 0.35
     glossary: dict[str, str] = field(default_factory=dict)
+    target_language: str = ""       # "" = auto (the opposite of the input language)
 
 
 @dataclass
 class UIConfig:
-    language: str = "zh"            # zh | en: UI language AND ASR source language
+    language: str = "zh"            # zh | en: INPUT language (ASR) and UI language
     mode: str = "live"              # live | rec
     hotkey: str = "ctrl+alt"        # push-to-talk chord
     hotkey_mode: str = "hold"       # hold | toggle
@@ -199,7 +273,9 @@ class AppConfig:
 
     @property
     def target_language(self) -> str:
-        return other_language(self.language)
+        """Output language: explicit choice, or the opposite of the input."""
+        chosen = normalize_language_output(self.translate.target_language)
+        return chosen or other_language(self.language)
 
     @property
     def mode(self) -> str:
@@ -234,6 +310,8 @@ class AppConfig:
             self.ui.mode = "live"
         if self.ui.hotkey_mode not in ("hold", "toggle"):
             self.ui.hotkey_mode = "hold"
+        # empty target means "auto = the other language"
+        self.translate.target_language = normalize_language_output(self.translate.target_language)
         # tiers may arrive as plain dicts from YAML
         normalized: dict[str, TierConfig] = {}
         for name in MODES:
@@ -347,6 +425,9 @@ def default_config_dict() -> dict[str, Any]:
 
 __all__ = [
     "LANGUAGES", "MODES", "MODE_LABELS", "MODE_HINTS", "TIER_SAMPLE_RATES",
+    "OUTPUT_LANGUAGES", "OUTPUT_LANGUAGE_CODES", "TTS_LANGUAGES",
+    "output_languages", "output_language_label", "speaks_target",
+    "normalize_language_output",
     "AppConfig", "UIConfig", "TTSConfig", "TierConfig", "ASRConfig",
     "AudioConfig", "LLMConfig", "LLMEndpoint", "ServersConfig",
     "TranslateConfig", "PipelineConfig", "PathsConfig",

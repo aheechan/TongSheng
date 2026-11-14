@@ -17,7 +17,8 @@ from PySide6.QtWidgets import (
 )
 
 from .. import APP_NAME, __version__, i18n
-from ..config import LANGUAGES, MODE_LABELS
+from ..config import (LANGUAGES, MODE_LABELS, output_language_label,
+                      output_languages, speaks_target)
 from ..service import State, TurnResult
 from . import palette
 
@@ -107,11 +108,19 @@ class MainWindow(QWidget):
         row.addWidget(self.mode_row, 1)
         root.addLayout(row)
 
-        # language
+        # input language (ASR + UI)
         row, _ = self._setting_row("language")
         self.lang_row = ToggleRow(
-            [(code, label) for code, label in LANGUAGES.items()], self._on_language)
+            [(code, label) for code, label in LANGUAGES.items()], self._on_input_language)
         row.addWidget(self.lang_row, 1)
+        root.addLayout(row)
+
+        # output language (everything Index-Translate can produce)
+        row, _ = self._setting_row("output")
+        self.output_box = QComboBox()
+        self.output_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.output_box.currentIndexChanged.connect(self._on_output_language)
+        row.addWidget(self.output_box, 1)
         root.addLayout(row)
 
         # voice
@@ -155,6 +164,7 @@ class MainWindow(QWidget):
         root.addLayout(actions)
 
         self._fill_voices()
+        self._fill_output_languages()
 
     def _setting_row(self, key: str) -> tuple[QHBoxLayout, Any]:
         row = QHBoxLayout()
@@ -187,16 +197,36 @@ class MainWindow(QWidget):
             self.voice_box.setCurrentIndex(index)
         self.voice_box.blockSignals(False)
 
+    def _fill_output_languages(self) -> None:
+        self.output_box.blockSignals(True)
+        self.output_box.clear()
+        current = self.config.target_language
+        for code, label, speaks in output_languages(self.config.language):
+            text = label if speaks else f"{label} · {t('menu.text_only')}"
+            self.output_box.addItem(text, code)
+        index = self.output_box.findData(current)
+        if index >= 0:
+            self.output_box.setCurrentIndex(index)
+        self.output_box.blockSignals(False)
+
     # -- user actions ---------------------------------------------------
     def _on_mode(self, mode: str) -> None:
         self.tray._set_mode(mode)
         self.mode_row.set_current(self.config.mode)
         self._update_hint()
 
-    def _on_language(self, language: str) -> None:
-        self.tray._set_language(language)
+    def _on_input_language(self, language: str) -> None:
+        self.tray._set_input_language(language)
         self.lang_row.set_current(self.config.language)
+        self._fill_output_languages()
         self.retranslate()
+
+    def _on_output_language(self, _index: int) -> None:
+        code = self.output_box.currentData()
+        if not code:
+            return
+        self.tray._set_output_language(code)
+        self._update_hint()
 
     def _on_voice(self, _index: int) -> None:
         voice_id = self.voice_box.currentData()
@@ -247,13 +277,20 @@ class MainWindow(QWidget):
 
     # -- i18n -----------------------------------------------------------
     def _update_hint(self) -> None:
-        self.hint.setText(i18n.mode_hint(self.config.mode))
+        hint = i18n.mode_hint(self.config.mode)
+        target = self.config.target_language
+        if not speaks_target(target):
+            label = output_language_label(target, i18n.language())
+            hint = f"{hint}  ·  " + t("notify.text_only", lang=label)
+        self.hint.setText(hint)
 
     def retranslate(self) -> None:
         self.title.setText("同声 · TongSheng" if i18n.language() == "zh" else "TongSheng")
         self.subtitle.setText(t("app.desc"))
         self.state_label.setText(t("state.idle"))
-        for attr, key in (("quality_label", "menu.mode"), ("language_label", "menu.language"),
+        for attr, key in (("quality_label", "menu.mode"),
+                          ("language_label", "settings.input_language"),
+                          ("output_label", "settings.output_language"),
                           ("voice_label", "menu.voice")):
             label = getattr(self, attr, None)
             if label is not None:
@@ -262,6 +299,7 @@ class MainWindow(QWidget):
             [(m, MODE_LABELS[m].get(i18n.language(), m)) for m in ("live", "rec")])
         self.lang_row.set_current(self.config.language)
         self.mode_row.set_current(self.config.mode)
+        self._fill_output_languages()
         self.talk_button.setText("🎙  " + t("menu.start"))
         self.settings_button.setText(t("menu.settings").replace("…", ""))
         self.history_button.setText(t("menu.history").replace("…", ""))

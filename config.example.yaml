@@ -77,13 +77,15 @@ translate:
   style: daily              # daily | live | business | subtitle
   max_edit_ratio: 0.35
   glossary: {}
+  target_language: ""       # 输出语言：留空 = 自动（输入语言的反向）
+                            # zh/en/ja/ko/es/fr/de/ru/pt/it/ar/vi/th/id/tr
 
 ui:
-  language: zh              # zh | en —— 同时切换界面与识别语言
+  language: zh              # 输入语言 + 界面语言（zh | en）
   mode: live                # live | rec —— 托盘可切
   hotkey: ctrl+alt
   hotkey_mode: hold         # hold = 按住说话；toggle = 按一下开始/再按停止
-  start_minimized: true
+  start_minimized: false    # false = 启动即显示控制窗口
   notify_translation: true
 
 pipeline:

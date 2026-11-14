@@ -15,7 +15,8 @@
 
 同声（TongSheng）是一个 Windows 系统托盘小工具：按下快捷键说话，它把你说的话识别出来、纠错、翻译成另一种语言，然后用**你自己训练出来的声音**读出来。
 
-- 中文 ⇄ 英文双语，托盘一键切换（同时切换界面语言与识别模型）
+- 输入语言：中文 / English（切换即换 ASR 模型，并自动预热）
+- 输出语言：Index-Translate 支持的 **15 种**；其中 中/英/日/韩 可直接用克隆音色朗读
 - 两档输出品质：**LIVE 24 kHz 实时同传**（低延迟、边说边译）与 **REC 48 kHz 录音模式**（整句合成、音质优先）
 - 音频不出本机：ASR、纠错、翻译、合成全部在本地跑
 
@@ -35,10 +36,18 @@
 
 | 阶段 | 中文 | 英文 | 说明 |
 |---|---|---|---|
-| 识别 | FunASR Paraformer-zh | faster-whisper small | 语言切换即换模型 |
+| 识别 | FunASR Paraformer-zh | faster-whisper small | 切换输入语言即换模型并预热 |
 | 纠错 | Qwen3-1.7B（llama.cpp） | 同左 | 只改识别错误，不改原意；改动过大自动回退 |
 | 翻译 | Index-Translate-9B | 同左 | 口语化意译，不是逐字直译 |
 | 合成 | GPT-SoVITS v3 / v4 | 同左 | 同一个克隆音色，两档品质 |
+
+### 输出语言
+
+`中文 / English / 日本語 / 한국어` 四门语言可以直接用你的克隆音色朗读（GPT-SoVITS 前端支持 zh/en/ja/ko/yue）。
+
+`Español / Français / Deutsch / Русский / Português / Italiano / العربية / Tiếng Việt / ไทย / Bahasa Indonesia / Türkçe`
+这 11 种语言 Index-Translate 能翻译，但 GPT-SoVITS 还发不出对应语种的音 —— 选到它们时程序会
+**只输出文字译文**（界面上标注「仅文字」，转录区和粘贴都不受影响），绝不拿别的语言硬读。
 
 ---
 
@@ -70,9 +79,12 @@
 ├─ 输出品质
 │   ├─ ✓ 同声传译（LIVE）      ← 低档 24 kHz
 │   └─   录音模式（REC）       ← 高档 48 kHz
-├─ 语言 / Language
-│   ├─ ✓ 中文                  ← 界面 + ASR 模型 + 翻译方向一起切
+├─ 输入语言
+│   ├─ ✓ 中文                  ← 界面 + ASR 模型一起切，并预热该语种模型
 │   └─   English
+├─ 输出语言
+│   ├─ ✓ 中文 / English / 日本語 / 한국어（可朗读）
+│   └─   Español … Türkçe（仅文字）
 ├─ 音色
 │   ├─ ✓ 格雷丝_v4
 │   └─   我的声音
@@ -85,7 +97,9 @@
 > 或者在「任务栏设置 → 选择哪些图标显示在任务栏上」里打开它。不想每次启动都弹窗口，就把
 > `config.yaml` 里的 `ui.start_minimized` 改成 `true`。
 
-- **语言切换**：选「中文」= 识别中文、译成英文；选 `English` = 识别英文、译成中文，同时整个界面换成英文。
+- **输入语言**：选「中文」= 用 FunASR 识别；选 `English` = 用 faster-whisper 识别，界面同步换英文，
+  并在后台预热 whisper。预热失败时会自动重启程序，让新语种成为启动时唯一加载的模型。
+- **输出语言**：默认跟随输入语言自动取反（中文→英文）；也可以手动锁定任意一种。
 - **音色**：列出 `voices/` 下所有克隆音色，点击即用。
 
 ---
@@ -166,7 +180,8 @@ LIVE 档找不到匹配的 v3 LoRA 时，会自动用 v3 底模 + 参考音频�
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `ui.language` | `zh` | 界面 + 识别语言 |
+| `ui.language` | `zh` | 输入语言 + 界面语言（`zh` / `en`） |
+| `translate.target_language` | `""` | 输出语言；留空 = 自动取输入的反向。可选 `zh/en/ja/ko/es/fr/de/ru/pt/it/ar/vi/th/id/tr` |
 | `ui.mode` | `live` | 输出品质档 |
 | `ui.hotkey` | `ctrl+alt` | 按住说话组合键；也可 `ctrl+shift+space` |
 | `ui.hotkey_mode` | `hold` | `hold` 按住说 / `toggle` 按一下开始 |

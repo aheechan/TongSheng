@@ -14,7 +14,8 @@ from PySide6.QtWidgets import (
 )
 
 from . import APP_NAME, __version__, i18n
-from .config import AppConfig, LANGUAGES, MODE_LABELS, normalize_language
+from .config import (AppConfig, LANGUAGES, MODE_LABELS, normalize_language,
+                     output_language_label, output_languages, speaks_target)
 from .logs import get_logger
 from .paths import ModelPaths
 from .service import State, TongShengService, TurnResult
@@ -78,7 +79,15 @@ class SettingsDialog(QDialog):
             self.language.addItem(label, code)
         index = self.language.findData(config.language)
         self.language.setCurrentIndex(max(0, index))
-        form.addRow(t("settings.language"), self.language)
+        form.addRow(t("settings.input_language"), self.language)
+
+        self.output_language = QComboBox()
+        for code, label, speaks in output_languages(config.language):
+            text = label if speaks else f"{label} · {t('menu.text_only')}"
+            self.output_language.addItem(text, code)
+        index = self.output_language.findData(config.target_language)
+        self.output_language.setCurrentIndex(max(0, index))
+        form.addRow(t("settings.output_language"), self.output_language)
 
         self.voice = QComboBox()
         self.voice.addItem(t("voice.none"), "")
@@ -113,6 +122,7 @@ class SettingsDialog(QDialog):
 
     def apply(self) -> None:
         self.config.ui.language = normalize_language(self.language.currentData())
+        self.config.translate.target_language = self.output_language.currentData() or ""
         self.config.tts.voice = self.voice.currentData() or ""
         self.config.tts.speed = self.speed.value() / 100.0
         self.config.pipeline.inject_text = self.inject.isChecked()
@@ -163,6 +173,8 @@ class TongShengTray(QObject):
         self.menu = QMenu()
         self.tray.setContextMenu(self.menu)
         self.window = None
+        self.app_argv: list[str] = []
+        self._restart_guard = False
         self._build_menu()
         self.tray.activated.connect(self._on_tray_activated)
 
@@ -207,7 +219,7 @@ class TongShengTray(QObject):
             self.mode_actions[mode] = action
         self.menu.addMenu(self.mode_menu)
 
-        # language switch (UI + ASR model)
+        # input language (UI + ASR model)
         self.lang_menu = QMenu(t("menu.language"), self.menu)
         self.lang_group = QActionGroup(self.lang_menu)
         self.lang_group.setExclusive(True)
@@ -216,11 +228,29 @@ class TongShengTray(QObject):
             action = QAction(label, self.lang_menu)
             action.setCheckable(True)
             action.setChecked(self.config.language == code)
-            action.triggered.connect(lambda _checked=False, c=code: self._set_language(c))
+            action.triggered.connect(lambda _checked=False, c=code: self._set_input_language(c))
             self.lang_group.addAction(action)
             self.lang_menu.addAction(action)
             self.lang_actions[code] = action
         self.menu.addMenu(self.lang_menu)
+
+        # output language (everything Index-Translate can produce)
+        self.output_menu = QMenu(t("menu.output_language"), self.menu)
+        self.output_group = QActionGroup(self.output_menu)
+        self.output_group.setExclusive(True)
+        self.output_actions: dict[str, QAction] = {}
+        current_output = self.config.target_language
+        for code, label, speaks in output_languages(self.config.language):
+            text = label if speaks else f"{label} · {t('menu.text_only')}"
+            action = QAction(text, self.output_menu)
+            action.setCheckable(True)
+            action.setChecked(current_output == code if self.config.translate.target_language
+                              else current_output == code)
+            action.triggered.connect(lambda _checked=False, c=code: self._set_output_language(c))
+            self.output_group.addAction(action)
+            self.output_menu.addAction(action)
+            self.output_actions[code] = action
+        self.menu.addMenu(self.output_menu)
 
         # voices
         self.voice_menu = QMenu(t("menu.voice"), self.menu)
@@ -254,6 +284,7 @@ class TongShengTray(QObject):
             action.setText(MODE_LABELS[mode].get(i18n.language(), mode))
         self.mode_menu.setTitle(t("menu.mode"))
         self.lang_menu.setTitle(t("menu.language"))
+        self.output_menu.setTitle(t("menu.output_language"))
         self.voice_menu.setTitle(t("menu.voice"))
         self.talk_action.setText("🎙 " + t("menu.start"))
         self.status_action.setText(f"{t('menu.status')} · {t('state.idle')}")
@@ -262,6 +293,7 @@ class TongShengTray(QObject):
         self.history_action.setText(t("menu.history"))
         self.results_action.setText(t("menu.open_results"))
         self.quit_action.setText(t("menu.quit"))
+        self._rebuild_output_menu()
         if self.window is not None:
             try:
                 self.window.retranslate()
@@ -319,15 +351,53 @@ class TongShengTray(QObject):
         self._notify(f"{t('menu.mode')}: {MODE_LABELS[mode].get(i18n.language(), mode)}", hint)
         log.info("mode -> %s", mode)
 
-    def _set_language(self, language: str) -> None:
+    def _set_input_language(self, language: str) -> None:
         language = normalize_language(language)
         self.config.ui.language = language
-        self.service.set_language(language)
+        self.service.set_input_language(language)
         i18n.set_language(language)
+        self.lang_actions[language].setChecked(True)
+        # output language list is localised too; rebuild the menu label
+        self._rebuild_output_menu()
         self._save()
         self._retranslate()
-        self._notify(t("app.name"), t("app.desc"))
-        log.info("language -> %s", language)
+        self._notify(t("app.name"),
+                     t("notify.asr_warming", lang=LANGUAGES.get(language, language)))
+        log.info("input language -> %s", language)
+
+    def _set_output_language(self, code: str) -> None:
+        self.config.translate.target_language = code
+        self.service.set_output_language(code)
+        self._save()
+        self._update_output_checks()
+        label = output_language_label(code, self.config.language)
+        if speaks_target(code):
+            self._notify(t("menu.output_language"), label)
+        else:
+            self._notify(t("menu.output_language"),
+                         t("notify.text_only", lang=label))
+        if self.window is not None:
+            self.window.retranslate()
+        log.info("output language -> %s", code)
+
+    def _rebuild_output_menu(self) -> None:
+        self.output_menu.clear()
+        self.output_actions.clear()
+        current = self.config.translate.target_language
+        for code, label, speaks in output_languages(self.config.language):
+            text = label if speaks else f"{label} · {t('menu.text_only')}"
+            action = QAction(text, self.output_menu)
+            action.setCheckable(True)
+            action.setChecked(code == (current or self.config.target_language))
+            action.triggered.connect(lambda _c=False, c=code: self._set_output_language(c))
+            self.output_group.addAction(action)
+            self.output_menu.addAction(action)
+            self.output_actions[code] = action
+
+    def _update_output_checks(self) -> None:
+        current = self.config.translate.target_language or self.config.target_language
+        for code, action in self.output_actions.items():
+            action.setChecked(code == current)
 
     def _set_voice(self, voice_id: str) -> None:
         self.service.set_voice(voice_id)
@@ -348,8 +418,9 @@ class TongShengTray(QObject):
         dialog = SettingsDialog(self.config, self.service.tts.voices())
         if dialog.exec() == QDialog.Accepted:
             dialog.apply()
-            self.service.set_language(self.config.language)
             i18n.set_language(self.config.language)
+            self.service.set_input_language(self.config.language)
+            self.service.set_output_language(self.config.translate.target_language)
             self.service.set_voice(self.config.tts.voice)
             self._save()
             self._build_menu()
@@ -435,6 +506,49 @@ class TongShengTray(QObject):
                 self.service.end()
         elif message == "ready":
             self._notify(t("app.name"), t("state.ready"))
+        elif message.startswith("asr-warming:"):
+            language = message.split(":", 1)[1]
+            self._notify(t("app.name"),
+                         t("notify.asr_warming", lang=LANGUAGES.get(language, language)))
+        elif message.startswith("asr-ready:"):
+            language = message.split(":", 1)[1]
+            self._notify(t("app.name"),
+                         t("notify.asr_ready", lang=LANGUAGES.get(language, language)))
+        elif message.startswith("asr-failed:"):
+            self._handle_asr_failure(message)
+        elif message.startswith("text-only:"):
+            code = message.split(":", 1)[1]
+            self._notify(t("app.name"),
+                         t("notify.text_only",
+                           lang=output_language_label(code, self.config.language)))
+
+    def _handle_asr_failure(self, message: str) -> None:
+        parts = message.split(":", 2)
+        language = parts[1] if len(parts) > 1 else ""
+        reason = parts[2] if len(parts) > 2 else ""
+        log.error("ASR %s failed: %s", language, reason)
+        label = LANGUAGES.get(language, language)
+        self._notify(t("app.name"), t("notify.asr_restart", lang=label))
+        # Requirement: if the model cannot be warmed up in-process, restart the
+        # app so the new language is the only thing it loads at startup.
+        if not self._restart_guard:
+            self._restart_guard = True
+            QTimer.singleShot(1200, self._restart_app)
+
+    def _restart_app(self) -> None:
+        import sys
+
+        from PySide6.QtCore import QProcess
+
+        self._save()
+        try:
+            argv = list(getattr(self, "app_argv", []) or sys.argv)
+            started = QProcess.startDetached(sys.executable, argv)
+            log.info("restarting application: %s (ok=%s)", argv, started)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("restart failed: %s", exc)
+        finally:
+            self._quit()
 
     def _on_train(self, stage: str, message: str) -> None:
         self._notify(f"{t('train.title')} · {stage}", message)
