@@ -222,6 +222,7 @@ class TongShengTray(QObject):
         self._restart_guard = False
         self._press_at = 0.0
         self._stop_after_release = False
+        self._retired_hotkeys: list[Any] = []
         self._build_menu()
         self.tray.activated.connect(self._on_tray_activated)
 
@@ -234,7 +235,21 @@ class TongShengTray(QObject):
         i18n.set_language(config.language)
         self._hotkey = None
         self._install_hotkey()
+        # keep the shortcut alive even if another app unhooks or the thread dies
+        self._hotkey_watchdog = QTimer(self)
+        self._hotkey_watchdog.setInterval(3000)
+        self._hotkey_watchdog.timeout.connect(self._check_hotkey)
+        self._hotkey_watchdog.start()
         self.tray.show()
+
+    def _check_hotkey(self) -> None:
+        listener = self._hotkey
+        if listener is not None and listener.alive:
+            return
+        if getattr(self, "_hotkey_paused", False):
+            return
+        log.warning("hotkey listener is not alive — reinstalling")
+        self._install_hotkey()
 
     # -- menu -----------------------------------------------------------
     def _build_menu(self) -> None:
@@ -480,8 +495,8 @@ class TongShengTray(QObject):
             self._notify(t("menu.voice"), profile.name)
 
     def _toggle_talk(self) -> None:
-        if self.service.state == State.LISTENING:
-            self.service.end()
+        if self.service.state in (State.LISTENING, State.WORKING, State.SPEAKING):
+            self.service.cancel()
             self.talk_action.setText("🎙 " + t("menu.start"))
         else:
             if self.service.begin():
@@ -565,6 +580,8 @@ class TongShengTray(QObject):
 
             if self._hotkey is not None:
                 self._hotkey.stop()
+                self._retired_hotkeys.append(self._hotkey)
+                del self._retired_hotkeys[:-4]
             self._hotkey = HotkeyListener(
                 self.config.ui.hotkey,
                 on_press=lambda: self.bridge.status.emit("hotkey-press"),
@@ -573,6 +590,8 @@ class TongShengTray(QObject):
                 on_escape=lambda: self.bridge.status.emit("hotkey-escape"),
             )
             self._hotkey.start()
+            log.info("hotkey ready: %s (alive=%s)", self.config.ui.hotkey,
+                     self._hotkey.alive)
         except Exception as exc:  # noqa: BLE001
             log.warning("hotkey unavailable: %s", exc)
             self._hotkey = None
@@ -594,6 +613,8 @@ class TongShengTray(QObject):
         self.tray.setToolTip(tips.get(state, t("tray.tooltip.idle")))
         if state != "listening":
             self.talk_action.setText("🎙 " + t("menu.start"))
+        if state == "idle" and self._hotkey is not None:
+            self._hotkey.reset_gesture()
 
     def _on_turn(self, turn: TurnResult) -> None:
         # When the text is pasted straight into the focused field, do not pop a
@@ -655,10 +676,10 @@ class TongShengTray(QObject):
 
     def _escape_cancel(self) -> None:
         """ESC: drop the take / stop the speech, whatever stage we are in."""
-        if self.service.state == State.IDLE and not self.service.player.busy:
-            return
         log.info("ESC pressed — cancelling")
         self._stop_after_release = False
+        if self._hotkey is not None:
+            self._hotkey.reset_gesture()
         self.tray.setToolTip(t("tray.tooltip.idle"))
         self.service.cancel()
         self.talk_action.setText("🎙 " + t("menu.start"))
@@ -670,6 +691,11 @@ class TongShengTray(QObject):
         mode = self.config.ui.hotkey_mode
         if mode == "toggle":
             self._toggle_talk()
+            return
+        if self.service.state in (State.WORKING, State.SPEAKING):
+            # pressing while busy means "stop that", not "start a new take"
+            self.service.cancel()
+            self.talk_action.setText("🎙 " + t("menu.start"))
             return
         self._press_at = _time.monotonic()
         if self.service.state == State.LISTENING:

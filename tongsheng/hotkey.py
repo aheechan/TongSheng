@@ -215,17 +215,39 @@ class HotkeyListener:
             threading.Event().wait(0.02)
         return bool(self._thread_id)
 
+    @property
+    def alive(self) -> bool:
+        return (self._thread is not None and self._thread.is_alive()
+                and self._worker is not None and self._worker.is_alive()
+                and self._hook is not None and bool(self._thread_id))
+
+    def reset_gesture(self) -> None:
+        """Forget a half-finished press (release lost, cancel, state reset)."""
+        try:
+            self._down.clear()
+            self._active = False
+            self._cancelled = False
+        except Exception:
+            pass
+
     def stop(self) -> None:
         self._stop.set()
-        thread_id = self._thread_id
-        if thread_id:
-            ctypes.windll.user32.PostThreadMessageW(thread_id, 0x0012, 0, 0)  # WM_QUIT
         thread = self._thread
-        if thread is not None:
-            thread.join(timeout=1.5)
+        thread_id = self._thread_id
+        # WM_QUIT posted before the thread owns a message queue is lost;
+        # retry until the hook thread really exits.
+        for _ in range(30):
+            if thread is not None and not thread.is_alive():
+                break
+            if thread_id:
+                ctypes.windll.user32.PostThreadMessageW(thread_id, 0x0012, 0, 0)
+            threading.Event().wait(0.05)
+        if thread is not None and thread.is_alive():
+            log.warning("hotkey thread did not exit cleanly")
         self._thread = None
         self._thread_id = 0
         self._worker = None
+        self._hook = None
 
     def _run(self) -> None:
         user32 = ctypes.windll.user32

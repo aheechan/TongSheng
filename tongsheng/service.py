@@ -84,6 +84,7 @@ class TongShengService:
         self._translator: Translator | None = None
         self._ready = threading.Event()
         self._warming = False
+        self._turn_id = 0
 
         self.input = AudioInput(sample_rate=config.audio.sample_rate,
                                 device=config.audio.input_device,
@@ -322,10 +323,11 @@ class TongShengService:
 
     # -- capture --------------------------------------------------------
     def begin(self) -> bool:
-        if self._state in (State.WORKING,):
+        if self._state is State.WORKING:
+            self.on_error("上一段还在处理，按 ESC 可以取消")
             return False
         if not self.ready:
-            self.on_error("模型还在加载")
+            self.on_error("模型正在预热，请稍等几秒")
             return False
         self.player.stop()
         if not self.input.start_take():
@@ -336,34 +338,46 @@ class TongShengService:
 
     def end(self) -> None:
         if not self.input.recording:
+            # state and stream disagree: never leave the UI stuck in "listening"
+            if self._state is State.LISTENING:
+                self._set_state(State.IDLE, "idle")
             return
         samples = self.input.stop_take()
         if samples.size < self.config.audio.sample_rate * 0.25:
             self._set_state(State.IDLE, "too short")
             return
-        self._run_async(samples)
+        if not self._run_async(samples):
+            # a previous turn is still running: drop this take, go back to idle
+            self._set_state(State.IDLE, "busy")
 
     def abort_listening(self) -> None:
         """Drop the current take without transcribing (gesture was cancelled)."""
         self.input.abort_take()
-        if self._state == State.LISTENING:
+        if self._state is State.LISTENING:
             self._set_state(State.IDLE, "cancelled")
 
     def cancel(self) -> None:
+        """Abort the take, stop the speech and always return to idle."""
         self.input.abort_take()
         self.player.stop()
         self.tts.stop()
+        self._set_state(State.IDLE, "cancelled")
 
     # -- processing -----------------------------------------------------
-    def _run_async(self, samples) -> None:  # noqa: ANN001
-        if self._worker is not None and self._worker.is_alive():
-            self.on_error("上一段还在处理中")
-            return
-        self._worker = threading.Thread(target=self._process, args=(samples,),
+    def _run_async(self, samples) -> bool:  # noqa: ANN001
+        worker = self._worker
+        if worker is not None and worker.is_alive():
+            log.warning("previous turn still running; abandoning it")
+            self.tts.stop()
+            self.player.stop()
+        self._turn_id += 1
+        turn_id = self._turn_id
+        self._worker = threading.Thread(target=self._process, args=(samples, turn_id),
                                         name="ts-turn", daemon=True)
         self._worker.start()
+        return True
 
-    def _process(self, samples) -> None:  # noqa: ANN001
+    def _process(self, samples, turn_id: int | None = None) -> None:  # noqa: ANN001
         cfg = self.config
         source = cfg.language
         target = cfg.target_language
@@ -439,7 +453,10 @@ class TongShengService:
             self._set_state(State.ERROR, str(exc))
             time.sleep(0.2)
         finally:
-            self._set_state(State.IDLE, "ready")
+            if turn_id is not None and turn_id != self._turn_id:
+                log.info("stale turn %s finished after turn %s", turn_id, self._turn_id)
+            else:
+                self._set_state(State.IDLE, "ready")
 
     def _append_history(self, result: TurnResult) -> None:
         base = self.models.results or Path("results")

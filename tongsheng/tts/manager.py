@@ -257,7 +257,11 @@ class TTSRuntime:
                         produced_sr = tier.sample_rate
                         player.push(chunk, produced_sr)
                         total_samples += chunk.size
-                player.wait()
+                # never block forever if the output device stops consuming
+                limit = total_samples / float(tier.sample_rate or 1) * 2.0 + 15.0
+                if not player.wait(timeout=limit):
+                    log.warning("playback did not finish in %.1fs; stopping", limit)
+                    player.stop()
         except Exception as exc:  # noqa: BLE001
             log.exception("synthesis failed")
             result.error = f"{type(exc).__name__}: {exc}"
