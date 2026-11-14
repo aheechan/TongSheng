@@ -102,7 +102,7 @@ MODE_LABELS: dict[str, dict[str, str]] = {
     "rec": {"zh": "录音模式（REC）", "en": "Recording mode (REC)"},
 }
 MODE_HINTS: dict[str, dict[str, str]] = {
-    "live": {"zh": "低延迟 · v4 四步 · 整句渲染", "en": "Low latency · v4, 4 steps · whole sentence"},
+    "live": {"zh": "低延迟 · v4 十二步 · 分块渲染", "en": "Low latency · v4, 12 steps · chunked"},
     "rec": {"zh": "高保真 · v4 十二步 · 48 kHz", "en": "High fidelity · v4, 12 steps · 48 kHz"},
 }
 
@@ -189,6 +189,9 @@ class TTSConfig:
     fade_out_ms: float = 25.0
     max_sec_per_char: float = 0.55     # runaway-sentence guard (project A)
     retry_bad_sentence: bool = True    # retry quiet / over-long renders
+    live_chunk_chars: int = 32         # LIVE renders 1-2 sentences per call so the
+                                       # prosody model keeps context (REC does the
+                                       # whole text at once and sounds smooth)
     keep_both_tiers_loaded: bool = False
     warmup: bool = True             # preload the selected tier at startup
     voice: str = ""                 # selected voice profile id
@@ -199,7 +202,7 @@ class TTSConfig:
                                     # sentence first, smooth playback
     tiers: dict[str, TierConfig] = field(default_factory=lambda: {
         "live": TierConfig(version="v4", sample_rate=48000, streaming=True,
-                           fragment_interval=0.32, split_method="cut5", sample_steps=4),
+                           fragment_interval=0.32, split_method="cut5", sample_steps=12),
         "rec": TierConfig(version="v4", sample_rate=48000, streaming=False,
                           fragment_interval=0.0, split_method="cut5", sample_steps=12),
     })

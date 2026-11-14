@@ -75,7 +75,7 @@ class TTSRuntime:
         if self.models.gpt_sovits is None:
             raise TTSError("未找到 GPT-SoVITS 目录，请在设置中指定 paths.gpt_sovits")
         gpt, sovits = self._checkpoints(mode, profile)
-        key = f"{mode}:{gpt}:{sovits}"
+        key = f"{gpt}:{sovits}"
         with self._lock:
             engine = self._engines.get(key)
             if engine is not None and engine.loaded:
@@ -227,6 +227,10 @@ class TTSRuntime:
                 sentences = split_sentences(
                     value, cfg_tts.max_chars_per_sentence, lang,
                     min_chars=cfg_tts.min_chars_per_sentence)
+                # REC renders the whole text in one call and sounds best; LIVE
+                # keeps that context by rendering 1-2 sentences per call, then
+                # plays them back to back while the next chunk is generated.
+                sentences = _merge_for_live(sentences, int(cfg_tts.live_chunk_chars))
                 streaming = bool(cfg_tts.live_fragments)
                 gap_ms = max(0, int(cfg_tts.sentence_gap_ms))
                 gap = np.zeros(int(tier.sample_rate * gap_ms / 1000.0), dtype=np.float32)
@@ -336,6 +340,24 @@ class TTSRuntime:
         folder.mkdir(parents=True, exist_ok=True)
         name = time.strftime("%Y%m%d-%H%M%S") + f"-{sr // 1000}k.wav"
         return wavmod.write_wav(folder / name, audio, sr)
+
+
+def _merge_for_live(sentences: list[str], limit: int) -> list[str]:
+    """Group short sentences so each TTS call has enough prosody context."""
+    if limit <= 0 or len(sentences) <= 1:
+        return sentences
+    merged: list[str] = []
+    current = ""
+    for sentence in sentences:
+        candidate = (current + sentence) if current else sentence
+        if current and len(candidate) > limit:
+            merged.append(current)
+            current = sentence
+        else:
+            current = candidate
+    if current:
+        merged.append(current)
+    return merged
 
 
 def _apply_fades(samples: np.ndarray, samplerate: int,
