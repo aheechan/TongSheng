@@ -209,11 +209,12 @@ class HotkeyListener:
         self._worker.start()
         self._thread = threading.Thread(target=self._run, name="ts-hotkey", daemon=True)
         self._thread.start()
-        for _ in range(50):
-            if self._thread_id:
-                return True
+        # wait for the hook itself so `alive` is truthful right after start()
+        for _ in range(60):
+            if self._hook is not None or not self._thread.is_alive():
+                break
             threading.Event().wait(0.02)
-        return bool(self._thread_id)
+        return self._hook is not None
 
     @property
     def alive(self) -> bool:
