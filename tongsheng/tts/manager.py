@@ -220,27 +220,34 @@ class TTSRuntime:
                 player.push(audio, produced_sr)
                 total_samples = audio.size
             else:
-                sentences = split_sentences(value, self.config.tts.max_chars_per_sentence, lang)
-                streaming = bool(self.config.tts.live_fragments)
-                for sentence in sentences:
+                cfg_tts = self.config.tts
+                sentences = split_sentences(
+                    value, cfg_tts.max_chars_per_sentence, lang,
+                    min_chars=cfg_tts.min_chars_per_sentence)
+                streaming = bool(cfg_tts.live_fragments)
+                gap_ms = max(0, int(cfg_tts.sentence_gap_ms))
+                gap = np.zeros(int(tier.sample_rate * gap_ms / 1000.0), dtype=np.float32)
+                for index, sentence in enumerate(sentences):
                     if self._stop.is_set():
                         break
                     if on_sentence:
                         on_sentence(sentence)
                     if not streaming:
-                        # Project A strategy: finish the whole sentence, then
-                        # play it. Slightly higher first-syllable latency, but
-                        # no stitched fragment artefacts ("单字延音").
-                        audio, sr = engine.synthesize_all(
-                            sentence, streaming=False,
-                            **{k: v for k, v in common.items()
-                               if k not in ("fragment_interval",)})
+                        # Project A strategy: render the whole sentence first,
+                        # fade the edges, breathe between sentences, then play.
+                        audio, sr = self._render_sentence(
+                            engine, sentence, common, lang, tier, cfg_tts)
                         if audio.size == 0:
                             continue
                         if sr != tier.sample_rate:
                             audio = wavmod.resample(audio, sr, tier.sample_rate)
+                        audio = _apply_fades(audio, tier.sample_rate,
+                                             cfg_tts.fade_in_ms, cfg_tts.fade_out_ms)
                         if live_gain != 1.0:
                             audio = np.clip(audio * live_gain, -1.0, 1.0).astype(np.float32)
+                        if index and gap.size:
+                            player.push(gap, tier.sample_rate)
+                            total_samples += gap.size
                         produced_sr = tier.sample_rate
                         player.push(audio, produced_sr)
                         total_samples += audio.size
@@ -277,6 +284,30 @@ class TTSRuntime:
                  time.perf_counter() - start, produced_sr)
         return result
 
+    def _render_sentence(self, engine, sentence: str, common: dict,
+                         lang: str, tier, cfg_tts) -> tuple[np.ndarray, int]:
+        """Render one sentence, retrying obviously broken output (project A)."""
+        kwargs = {k: v for k, v in common.items() if k != "fragment_interval"}
+        audio, sr = engine.synthesize_all(sentence, streaming=False, **kwargs)
+        if not cfg_tts.retry_bad_sentence or audio.size == 0:
+            return audio, sr
+        seconds = audio.size / float(sr or 1)
+        peak = float(np.max(np.abs(audio)))
+        expected = max(0.6, len(sentence) * float(cfg_tts.max_sec_per_char))
+        bad = peak < 0.02 or seconds > expected * 1.8
+        if not bad:
+            return audio, sr
+        log.info("retrying sentence (peak=%.3f, %.2fs vs expected %.1fs): %r",
+                 peak, seconds, expected, sentence[:28])
+        retry = dict(kwargs)
+        retry["top_k"] = 15
+        retry["temperature"] = 0.7
+        retry["seed"] = int(time.time()) % 99991
+        audio2, sr2 = engine.synthesize_all(sentence, streaming=False, **retry)
+        if audio2.size == 0:
+            return audio, sr
+        return audio2, sr2
+
     def synthesize_file(self, text: str, mode: str, path: str | Path,
                         text_lang: str | None = None) -> Path:
         profile = self.current_voice()
@@ -302,6 +333,25 @@ class TTSRuntime:
         folder.mkdir(parents=True, exist_ok=True)
         name = time.strftime("%Y%m%d-%H%M%S") + f"-{sr // 1000}k.wav"
         return wavmod.write_wav(folder / name, audio, sr)
+
+
+def _apply_fades(samples: np.ndarray, samplerate: int,
+                 fade_in_ms: float, fade_out_ms: float) -> np.ndarray:
+    """Raised-cosine edge fades; project A uses 12 ms in / 25 ms out."""
+    data = np.asarray(samples, dtype=np.float32).copy()
+    if data.size == 0 or samplerate <= 0:
+        return data
+    fin = int(samplerate * max(0.0, float(fade_in_ms)) / 1000.0)
+    fout = int(samplerate * max(0.0, float(fade_out_ms)) / 1000.0)
+    fin = min(fin, data.size // 2)
+    fout = min(fout, data.size - fin)
+    if fin > 1:
+        window = 0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, fin, dtype=np.float32))
+        data[:fin] *= window
+    if fout > 1:
+        window = 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, fout, dtype=np.float32))
+        data[-fout:] *= window
+    return data
 
 
 __all__ = ["TTSRuntime", "SpeechResult"]

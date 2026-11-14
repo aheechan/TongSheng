@@ -32,7 +32,13 @@ tts:
   top_k: 5
   top_p: 1.0
   repetition_penalty: 1.9
-  max_chars_per_sentence: 50
+  max_chars_per_sentence: 40
+  min_chars_per_sentence: 6
+  sentence_gap_ms: 80        # 句子之间的停顿（参照项目 A）
+  fade_in_ms: 12             # 每句淡入/淡出，避免爆音
+  fade_out_ms: 25
+  max_sec_per_char: 0.55     # 异常长/空洞的合成结果会重试
+  retry_bad_sentence: true
   keep_both_tiers_loaded: false
   voice: ""                 # 音色 id，留空用第一个
   tiers:

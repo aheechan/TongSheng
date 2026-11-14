@@ -21,7 +21,8 @@ def detect_language(text: str) -> str:
     return "zh" if cjk >= latin else "en"
 
 
-def split_sentences(text: str, max_chars: int = 50, lang: str = "zh") -> list[str]:
+def split_sentences(text: str, max_chars: int = 50, lang: str = "zh",
+                    min_chars: int = 0) -> list[str]:
     """Split into TTS-sized chunks without breaking words."""
     value = re.sub(r"\s+", " ", (text or "").strip())
     if not value:
@@ -39,7 +40,26 @@ def split_sentences(text: str, max_chars: int = 50, lang: str = "zh") -> list[st
     out: list[str] = []
     for chunk in chunks:
         out.extend(_split_long(chunk, max_chars, lang))
-    return [c for c in out if c.strip()]
+    out = [c for c in out if c.strip()]
+    if min_chars > 1 and len(out) > 1:
+        # project A never synthesises 1–2 character fragments: merge them into
+        # the neighbouring sentence so prosody stays natural
+        merged: list[str] = []
+        pending = ""
+        for piece in out:
+            candidate = (pending + piece) if pending else piece
+            if len(candidate) < min_chars:
+                pending = candidate
+                continue
+            merged.append(candidate)
+            pending = ""
+        if pending:
+            if merged:
+                merged[-1] += pending
+            else:
+                merged.append(pending)
+        out = merged
+    return out
 
 
 def _split_long(text: str, max_chars: int, lang: str) -> list[str]:

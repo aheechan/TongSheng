@@ -182,7 +182,13 @@ class TTSConfig:
     top_k: int = 5
     top_p: float = 1.0
     repetition_penalty: float = 1.9
-    max_chars_per_sentence: int = 50
+    max_chars_per_sentence: int = 40
+    min_chars_per_sentence: int = 6
+    sentence_gap_ms: int = 80          # breathing room between spoken sentences
+    fade_in_ms: float = 12.0           # project A's edge fades: avoid clicks
+    fade_out_ms: float = 25.0
+    max_sec_per_char: float = 0.55     # runaway-sentence guard (project A)
+    retry_bad_sentence: bool = True    # retry quiet / over-long renders
     keep_both_tiers_loaded: bool = False
     warmup: bool = True             # preload the selected tier at startup
     voice: str = ""                 # selected voice profile id
