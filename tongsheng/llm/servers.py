@@ -6,8 +6,12 @@ started itself, and reuses anything already listening on the configured port.
 
 from __future__ import annotations
 
+import ctypes
+import ctypes.wintypes as wt
 import json
 import os
+import signal
+import socket
 import subprocess
 import sys
 import time
@@ -26,6 +30,36 @@ log = get_logger("llm.servers")
 
 class ServerError(RuntimeError):
     pass
+
+
+_NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def port_in_use(host: str, port: int, timeout: float = 0.4) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _looks_like_llama(pid: int) -> bool:
+    """Only kill PIDs that really are llama-server processes."""
+    try:
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, int(pid))  # QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        try:
+            buffer = ctypes.create_unicode_buffer(1024)
+            size = wt.DWORD(1024)
+            if not kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
+                return False
+            return "llama-server" in buffer.value.lower()
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        return False
 
 
 @dataclass
@@ -71,16 +105,29 @@ class LlamaServer:
 
     def is_ready(self, timeout_s: float = 1.0, expected_alias: str | None = None) -> bool:
         try:
-            with urllib.request.urlopen(self.spec.health_url(), timeout=timeout_s) as response:
+            with _NO_PROXY_OPENER.open(self.spec.health_url(), timeout=timeout_s) as response:
                 if response.status != 200:
                     return False
                 body = response.read().decode("utf-8", errors="replace")
             data = json.loads(body)
-            if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+            if not isinstance(data, dict):
+                return False
+            # llama.cpp answers either {"data": [...]} (OpenAI style) or
+            # {"models": [...]} depending on build; accept both.
+            items = data.get("data")
+            if not isinstance(items, list):
+                items = data.get("models")
+            if not isinstance(items, list):
                 return False
             if expected_alias:
-                ids = {str(item.get("id", "")) for item in data["data"]
-                       if isinstance(item, dict)}
+                ids = set()
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    for key in ("id", "name", "model"):
+                        value = item.get(key)
+                        if value:
+                            ids.add(str(value))
                 if expected_alias not in ids:
                     return False
             return True
@@ -98,6 +145,16 @@ class LlamaServer:
             return False
         if not Path(self.spec.model_path).exists():
             raise ServerError(f"{self.spec.name}: model missing: {self.spec.model_path}")
+        if port_in_use(self.spec.host, self.spec.port):
+            # someone else owns the port: wait briefly, never spawn a second
+            # server into it (that used to pile up zombies and eat all VRAM)
+            for _ in range(20):
+                if self.is_ready(expected_alias=self.spec.alias):
+                    return False
+                time.sleep(0.5)
+            raise ServerError(
+                f"{self.spec.name}: port {self.spec.port} is busy but not healthy; "
+                f"another program may be using it")
         binary = resolve_llama_binary(self.spec.binary)
         if not binary:
             raise ServerError(
@@ -141,7 +198,7 @@ class LlamaServer:
             self.spec.health_url().replace("/models", "/chat/completions"),
             data=payload, headers={"Content-Type": "application/json"}, method="POST")
         try:
-            with urllib.request.urlopen(request, timeout=timeout_s) as response:
+            with _NO_PROXY_OPENER.open(request, timeout=timeout_s) as response:
                 body = response.read().decode("utf-8", errors="replace")
                 if response.status != 200:
                     raise ServerError(f"{self.spec.name}: probe returned {response.status}")
@@ -169,8 +226,53 @@ class ServerManager:
     def __init__(self, servers: list[LlamaServer] | None = None) -> None:
         self.servers = servers or []
         self.failed: set[str] = set()
-        self.startup_timeout_s = 90.0
+        self.startup_timeout_s = 180.0
         self.probe_timeout_s = 30.0
+        self.log_dir: str | None = None
+
+    # -- orphan bookkeeping ---------------------------------------------
+    def _pidfile(self):
+        from pathlib import Path
+
+        base = Path(self.log_dir) if self.log_dir else Path("logs")
+        base.mkdir(parents=True, exist_ok=True)
+        return base / "llama-servers.json"
+
+    def _cleanup_orphans(self) -> None:
+        """Kill llama-server processes left behind by a previous run."""
+        path = self._pidfile()
+        if not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            data = {}
+        for pid in data.get("pids", []):
+            try:
+                if not _looks_like_llama(int(pid)):
+                    continue
+                os.kill(int(pid), signal.SIGTERM)
+                log.info("killed orphan llama-server pid=%s", pid)
+            except Exception:  # noqa: BLE001
+                continue
+        try:
+            path.unlink()
+        except OSError:
+            pass
+
+    def _remember(self) -> None:
+        pids = [server._process.pid for server in self.servers
+                if server._process is not None and server.running]
+        try:
+            self._pidfile().write_text(json.dumps({"pids": pids}), encoding="utf-8")
+        except OSError:
+            pass
+
+    def _forget(self) -> None:
+        try:
+            self._pidfile().unlink()
+        except OSError:
+            pass
 
     @classmethod
     def from_config(cls, config: AppConfig, models=None) -> "ServerManager":
@@ -211,12 +313,15 @@ class ServerManager:
             ))
         manager = cls([LlamaServer(spec) for spec in specs])
         manager.startup_timeout_s = max(30.0, float(config.llm.servers.startup_timeout_s))
+        if models is not None and getattr(models, "logs", None):
+            manager.log_dir = str(models.logs)
         return manager
 
     def start_all(self, on_status=None) -> list[str]:
         status = on_status or (lambda _msg: None)
         errors: list[str] = []
         self.failed.clear()
+        self._cleanup_orphans()
         for server in self.servers:
             try:
                 if server.is_ready(expected_alias=server.spec.alias):
@@ -231,6 +336,7 @@ class ServerManager:
                 errors.append(str(exc))
                 self.failed.add(server.spec.name)
                 log.warning("server %s failed: %s", server.spec.name, exc)
+        self._remember()
         return errors
 
     def stop_all(self) -> None:
@@ -239,6 +345,7 @@ class ServerManager:
                 server.stop()
             except Exception:
                 pass
+        self._forget()
 
     def status(self) -> dict[str, str]:
         out: dict[str, str] = {}

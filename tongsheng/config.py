@@ -232,7 +232,7 @@ def emotions(ui_language: str = "zh") -> list[tuple[str, str]]:
 @dataclass
 class LLMEndpoint:
     enabled: bool = True
-    base_url: str = "http://127.0.0.1:8091/v1"
+    base_url: str = "http://127.0.0.1:8093/v1"
     model: str = "qwen3-1.7b-instruct"
     api_key: str = "EMPTY"
     model_path: str = "auto"
@@ -254,9 +254,9 @@ class ServersConfig:
 @dataclass
 class LLMConfig:
     corrector: LLMEndpoint = field(default_factory=lambda: LLMEndpoint(
-        base_url="http://127.0.0.1:8091/v1", model="qwen3-1.7b-instruct", max_tokens=512))
+        base_url="http://127.0.0.1:8093/v1", model="qwen3-1.7b-instruct", max_tokens=512))
     translator: LLMEndpoint = field(default_factory=lambda: LLMEndpoint(
-        base_url="http://127.0.0.1:8092/v1", model="Index-Translate-9B", max_tokens=384))
+        base_url="http://127.0.0.1:8094/v1", model="Index-Translate-9B", max_tokens=384))
     servers: ServersConfig = field(default_factory=ServersConfig)
 
 
@@ -346,6 +346,13 @@ class AppConfig:
         if self.tts.emotion not in EMOTION_KEYS:
             self.tts.emotion = "natural"
         self.tts.live_volume = max(0.0, min(1.5, float(self.tts.live_volume or 1.0)))
+        # our own ports: 8091/8092 belong to ALT-VoiceType on this machine
+        for endpoint, old_port, new_port in (
+                (self.llm.corrector, 8091, 8093), (self.llm.translator, 8092, 8094)):
+            url = endpoint.base_url
+            if f"127.0.0.1:{old_port}/" in url:
+                endpoint.base_url = url.replace(f"127.0.0.1:{old_port}/",
+                                                f"127.0.0.1:{new_port}/")
         # empty target means "auto = the other language"
         self.translate.target_language = normalize_language_output(self.translate.target_language)
         # tiers may arrive as plain dicts from YAML

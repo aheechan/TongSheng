@@ -28,6 +28,12 @@ def strip_thinking(text: str) -> str:
     return text
 
 
+# A system proxy (Clash/V2Ray/company VPN) makes urllib send even 127.0.0.1
+# requests through the proxy, which then drops them. Always talk to local
+# llama-server processes directly.
+_NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
 @dataclass
 class ChatClient:
     base_url: str
@@ -75,7 +81,7 @@ class ChatClient:
             request = urllib.request.Request(self._endpoint, data=data,
                                              headers=headers, method="POST")
             try:
-                with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
+                with _NO_PROXY_OPENER.open(request, timeout=self.timeout_s) as response:
                     body = response.read().decode("utf-8", errors="replace")
                 return self._parse_content(body)
             except urllib.error.HTTPError as exc:
@@ -93,7 +99,7 @@ class ChatClient:
         url = self.base_url + "/models" if self.base_url.endswith("/v1") \
             else self.base_url + "/v1/models"
         try:
-            with urllib.request.urlopen(url, timeout=timeout_s) as response:
+            with _NO_PROXY_OPENER.open(url, timeout=timeout_s) as response:
                 return response.status == 200
         except Exception:
             return False
