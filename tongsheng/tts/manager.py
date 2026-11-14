@@ -40,7 +40,9 @@ class TTSRuntime:
         self.on_status = on_status or (lambda _msg: None)
         self._engines: dict[str, SovitsEngine] = {}
         self._profile: VoiceProfile | None = None
-        self._lock = threading.Lock()
+        # re-entrant: speak() holds it while generating, and the warm-up thread
+        # must not unload the engine underneath a running synthesis (native AV).
+        self._lock = threading.RLock()
         self._stop = threading.Event()
 
     # -- voices ---------------------------------------------------------
@@ -204,6 +206,9 @@ class TTSRuntime:
         total_samples = 0
         produced_sr = tier.sample_rate
         try:
+            # Hold the runtime lock for the whole generation: a background
+            # warm-up must never unload the engine mid-synthesis.
+            self._lock.acquire()
             if mode == "rec":
                 audio, sr = engine.synthesize_all(value, streaming=False, **common)
                 if audio.size == 0:
@@ -257,6 +262,11 @@ class TTSRuntime:
             log.exception("synthesis failed")
             result.error = f"{type(exc).__name__}: {exc}"
             return result
+        finally:
+            try:
+                self._lock.release()
+            except RuntimeError:
+                pass
         result.sample_rate = produced_sr
         result.seconds = total_samples / float(produced_sr or 1)
         log.info("speak %s: %.1fs audio in %.1fs (%d Hz)", mode, result.seconds,
