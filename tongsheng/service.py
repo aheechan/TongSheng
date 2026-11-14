@@ -456,7 +456,30 @@ class TongShengService:
             if turn_id is not None and turn_id != self._turn_id:
                 log.info("stale turn %s finished after turn %s", turn_id, self._turn_id)
             else:
+                self.cleanup_recordings()
                 self._set_state(State.IDLE, "ready")
+
+    # -- recording cache cleanup ----------------------------------------
+    def cleanup_recordings(self, max_age_s: float = 180.0) -> int:
+        """When the record switch is off, drop cached takes older than 3 min."""
+        if self.config.ui.record_output:
+            return 0
+        base = self.models.results or Path("results")
+        folder = Path(base) / "rec"
+        if not folder.is_dir():
+            return 0
+        cutoff = time.time() - float(max_age_s)
+        removed = 0
+        for path in folder.glob("*.wav"):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    path.unlink()
+                    removed += 1
+            except OSError:
+                continue
+        if removed:
+            log.info("cleaned %d cached recordings (older than %.0fs)", removed, max_age_s)
+        return removed
 
     def _append_history(self, result: TurnResult) -> None:
         base = self.models.results or Path("results")

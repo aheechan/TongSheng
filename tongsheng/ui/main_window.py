@@ -12,8 +12,8 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
-    QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSlider,
-    QTextEdit, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
+    QSlider, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from .. import APP_NAME, __version__, i18n
@@ -118,12 +118,12 @@ class MainWindow(QWidget):
 
         root.addWidget(_divider())
 
-        # quality tier
-        row, self.mode_row = self._setting_row("quality")
-        self.mode_row = ToggleRow(
-            [(m, MODE_LABELS[m].get(i18n.language(), m)) for m in ("live", "rec")],
-            self._on_mode)
-        row.addWidget(self.mode_row, 1)
+        # recording switch (single synthesis pipeline)
+        row, _ = self._setting_row("quality")
+        self.record_box = QCheckBox(t("menu.record"))
+        self.record_box.setChecked(self.config.ui.record_output)
+        self.record_box.toggled.connect(self._on_record)
+        row.addWidget(self.record_box, 1)
         root.addLayout(row)
 
         # input language (ASR + UI)
@@ -249,9 +249,10 @@ class MainWindow(QWidget):
         self.output_box.blockSignals(False)
 
     # -- user actions ---------------------------------------------------
-    def _on_mode(self, mode: str) -> None:
-        self.tray._set_mode(mode)
-        self.mode_row.set_current(self.config.mode)
+    def _on_record(self, enabled: bool) -> None:
+        self.config.ui.record_output = enabled
+        self.tray._save()
+        self.tray.set_record_output(enabled)
         self._update_hint()
 
     def _on_input_language(self, language: str) -> None:
@@ -348,7 +349,7 @@ class MainWindow(QWidget):
 
     # -- i18n -----------------------------------------------------------
     def _update_hint(self) -> None:
-        hint = i18n.mode_hint(self.config.mode)
+        hint = t("notify.record_on") if self.config.ui.record_output else t("notify.record_off")
         target = self.config.target_language
         if not speaks_target(target):
             label = output_language_label(target, i18n.language())
@@ -367,10 +368,9 @@ class MainWindow(QWidget):
             label = getattr(self, attr, None)
             if label is not None:
                 label.setText(t(key))
-        self.mode_row.retranslate(
-            [(m, MODE_LABELS[m].get(i18n.language(), m)) for m in ("live", "rec")])
+        self.record_box.setText(t("menu.record"))
+        self.record_box.setChecked(self.config.ui.record_output)
         self.lang_row.set_current(self.config.language)
-        self.mode_row.set_current(self.config.mode)
         self._fill_output_languages()
         self.talk_button.setText("🎙  " + t("menu.start"))
         self.warmup_button.setText(t("menu.warmup"))

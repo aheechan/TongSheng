@@ -23,7 +23,7 @@ class ConfigTests(unittest.TestCase):
     def test_defaults(self) -> None:
         cfg = AppConfig()
         self.assertEqual(cfg.language, "zh")
-        self.assertEqual(cfg.mode, "live")
+        self.assertEqual(cfg.mode, "rec")
         self.assertEqual(cfg.target_language, "en")
         self.assertEqual(cfg.tier().sample_rate, 48000)
 

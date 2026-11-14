@@ -19,11 +19,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
 
     # ---- menu ----------------------------------------------------------
     "menu.status": {"zh": "状态", "en": "Status"},
-    "menu.mode": {"zh": "输出品质", "en": "Output quality"},
+    "menu.mode": {"zh": "录音", "en": "Recording"},
     "menu.language": {"zh": "输入语言", "en": "Input language"},
     "menu.output_language": {"zh": "输出语言", "en": "Output language"},
     "menu.text_only": {"zh": "仅文字", "en": "text only"},
     "menu.voice": {"zh": "音色", "en": "Voice"},
+    "menu.record": {"zh": "保存合成音频（录音）", "en": "Save synthesised audio"},
+    "notify.record_on": {"zh": "已开启：合成音频保存在 results/rec", "en": "On: audio saved to results/rec"},
+    "notify.record_off": {"zh": "已关闭：合成音频 3 分钟内自动清理", "en": "Off: audio auto-cleaned within 3 minutes"},
     "menu.start": {"zh": "开始说话", "en": "Start talking"},
     "menu.stop": {"zh": "停止", "en": "Stop"},
     "menu.settings": {"zh": "设置…", "en": "Settings…"},

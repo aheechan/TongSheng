@@ -151,7 +151,8 @@ class SettingsDialog(QDialog):
         form.addRow(self.inject)
 
         layout.addLayout(form)
-        hint = QLabel(i18n.mode_hint(config.mode))
+        hint = QLabel(t("notify.record_on") if config.ui.record_output
+                      else t("notify.record_off"))
         hint.setWordWrap(True)
         hint.setStyleSheet("color:#666;")
         layout.addWidget(hint)
@@ -240,6 +241,12 @@ class TongShengTray(QObject):
         self._hotkey_watchdog.setInterval(3000)
         self._hotkey_watchdog.timeout.connect(self._check_hotkey)
         self._hotkey_watchdog.start()
+        # when recording is off, sweep cached wavs every minute (3 min TTL)
+        self._cache_timer = QTimer(self)
+        self._cache_timer.setInterval(60_000)
+        self._cache_timer.timeout.connect(lambda: self.service.cleanup_recordings())
+        self._cache_timer.start()
+        self.service.cleanup_recordings()
         self.tray.show()
 
     def _check_hotkey(self) -> None:
@@ -269,22 +276,12 @@ class TongShengTray(QObject):
         self.menu.addAction(self.hotkey_pause_action)
         self.menu.addSeparator()
 
-        # quality tier switch
-        self.mode_menu = QMenu(t("menu.mode"), self.menu)
-        self.mode_group = QActionGroup(self.mode_menu)
-        self.mode_group.setExclusive(True)
-        self.mode_actions: dict[str, QAction] = {}
-        for mode in ("live", "rec"):
-            label = MODE_LABELS[mode].get(i18n.language(), mode)
-            action = QAction(label, self.mode_menu)
-            action.setCheckable(True)
-            action.setChecked(self.config.mode == mode)
-            action.setStatusTip(i18n.mode_hint(mode))
-            action.triggered.connect(lambda _checked=False, m=mode: self._set_mode(m))
-            self.mode_group.addAction(action)
-            self.mode_menu.addAction(action)
-            self.mode_actions[mode] = action
-        self.menu.addMenu(self.mode_menu)
+        # recording switch (one synthesis pipeline)
+        self.record_action = QAction(t("menu.record"), self.menu)
+        self.record_action.setCheckable(True)
+        self.record_action.setChecked(self.config.ui.record_output)
+        self.record_action.triggered.connect(self._set_record_output)
+        self.menu.addAction(self.record_action)
 
         # input language (UI + ASR model)
         self.lang_menu = QMenu(t("menu.language"), self.menu)
@@ -355,9 +352,8 @@ class TongShengTray(QObject):
         self.menu.addAction(self.quit_action)
 
     def _retranslate(self) -> None:
-        for mode, action in self.mode_actions.items():
-            action.setText(MODE_LABELS[mode].get(i18n.language(), mode))
-        self.mode_menu.setTitle(t("menu.mode"))
+        self.record_action.setText(t("menu.record"))
+        self.record_action.setChecked(self.config.ui.record_output)
         self.lang_menu.setTitle(t("menu.language"))
         self.output_menu.setTitle(t("menu.output_language"))
         self.voice_menu.setTitle(t("menu.voice"))
@@ -429,15 +425,22 @@ class TongShengTray(QObject):
             self.voice_menu.addAction(action)
 
     # -- actions --------------------------------------------------------
-    def _set_mode(self, mode: str) -> None:
-        if mode == self.config.mode:
-            return
-        self.config.ui.mode = mode
-        self.service.set_mode(mode)
+    def set_record_output(self, enabled: bool) -> None:
+        self.config.ui.record_output = bool(enabled)
+        if self.record_action.isChecked() != bool(enabled):
+            self.record_action.setChecked(bool(enabled))
+        if self.window is not None:
+            try:
+                self.window.record_box.setChecked(bool(enabled))
+            except Exception:
+                pass
+
+    def _set_record_output(self, checked: bool) -> None:
+        self.set_record_output(checked)
         self._save()
-        hint = i18n.mode_hint(mode)
-        self._notify(f"{t('menu.mode')}: {MODE_LABELS[mode].get(i18n.language(), mode)}", hint)
-        log.info("mode -> %s", mode)
+        self._notify(t("menu.record"),
+                     t("notify.record_on") if checked else t("notify.record_off"))
+        log.info("record_output -> %s", checked)
 
     def _set_input_language(self, language: str) -> None:
         language = normalize_language(language)

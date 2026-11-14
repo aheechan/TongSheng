@@ -283,7 +283,8 @@ class TranslateConfig:
 @dataclass
 class UIConfig:
     language: str = "zh"            # zh | en: INPUT language (ASR) and UI language
-    mode: str = "live"              # live | rec
+    mode: str = "rec"               # legacy: the synthesis pipeline is now single-tier
+    record_output: bool = False     # save every synthesised wav to results/rec
     hotkey: str = "lalt"            # lalt | ralt | alt | ctrl+alt | ctrl+shift+space …
     hotkey_mode: str = "smart"      # smart (tap latch / hold talk) | hold | toggle
     hotkey_threshold_ms: int = 280  # below this a tap is a toggle, above it a PTT
@@ -322,7 +323,9 @@ class AppConfig:
 
     @property
     def mode(self) -> str:
-        return self.ui.mode if self.ui.mode in MODES else "live"
+        # 1.1.0: LIVE and REC share one synthesis pipeline (the former REC
+        # parameters). Only the "save the audio" switch remains user-visible.
+        return "rec"
 
     def tier(self, mode: str | None = None) -> TierConfig:
         return self.tts.tier(mode or self.mode)
@@ -349,8 +352,7 @@ class AppConfig:
 
     def normalize(self) -> None:
         self.ui.language = normalize_language(self.ui.language)
-        if self.ui.mode not in MODES:
-            self.ui.mode = "live"
+        self.ui.mode = "rec"
         if self.ui.hotkey_mode not in ("smart", "hold", "toggle"):
             self.ui.hotkey_mode = "smart"
         if self.tts.emotion not in EMOTION_KEYS:
