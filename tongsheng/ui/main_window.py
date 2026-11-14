@@ -273,7 +273,12 @@ class MainWindow(QWidget):
 
     def _on_status(self, message: str) -> None:
         if message == "ready":
-            self.hint.setText(t("state.ready"))
+            self._update_hint()
+        elif message.startswith("asr-warming:"):
+            language = message.split(":", 1)[1]
+            self.hint.setText(t("notify.asr_warming", lang=language))
+        elif message.startswith("asr-ready:"):
+            self._update_hint()
 
     # -- i18n -----------------------------------------------------------
     def _update_hint(self) -> None:
