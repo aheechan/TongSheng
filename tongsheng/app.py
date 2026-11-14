@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 from . import APP_ID, APP_NAME
@@ -47,11 +48,32 @@ def _set_app_user_model_id() -> None:
         pass
 
 
+def _install_crash_handler(models: ModelPaths | None) -> None:
+    """Dump every thread's Python stack if the process dies natively (0xC0000005)."""
+    import faulthandler
+
+    try:
+        base = Path(models.logs) if models is not None and models.logs else Path("logs")
+        base.mkdir(parents=True, exist_ok=True)
+        handle = (base / "crash.log").open("a", encoding="utf-8", buffering=1)
+        handle.write(f"\n===== run {time.strftime('%Y-%m-%d %H:%M:%S')} =====\n")
+        faulthandler.enable(file=handle, all_threads=True)
+        globals()["_CRASH_HANDLE"] = handle
+    except Exception:  # noqa: BLE001
+        pass
+
+    def hook(exc_type, exc, tb):  # noqa: ANN001
+        log.error("unhandled exception", exc_info=(exc_type, exc, tb))
+
+    sys.excepthook = hook
+
+
 def run() -> int:
     _set_app_user_model_id()
     config = load_config()
     models = config.resolve_models()
     setup_logging(models.logs)
+    _install_crash_handler(models)
 
     from PySide6.QtWidgets import QApplication
 

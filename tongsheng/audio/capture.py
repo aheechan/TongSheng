@@ -62,8 +62,133 @@ def parse_device(value: str | int | None) -> int | None:
     return None
 
 
+class AudioInput:
+    """One persistent microphone stream used for both metering and recording.
+
+    Opening/closing PortAudio streams for every utterance is what makes some
+    WASAPI drivers unhappy (and it also made the level meter go dead while
+    recording). Here the stream stays open; a "take" is just a flag that makes
+    the callback keep the frames.
+    """
+
+    def __init__(self, sample_rate: int = 16000, device: str | int | None = None,
+                 max_seconds: float = 60.0, block_ms: int = 40) -> None:
+        self.sample_rate = int(sample_rate)
+        self.device = parse_device(device)
+        self.max_seconds = float(max_seconds)
+        self.block_ms = int(block_ms)
+        self._stream: Any = None
+        self._lock = threading.Lock()
+        self._take: list[np.ndarray] = []
+        self._recording = False
+        self._device_rate = 48000
+        self._level_db = -90.0
+        self._frames = 0
+        self._overflow = 0
+
+    # -- state ----------------------------------------------------------
+    @property
+    def running(self) -> bool:
+        return self._stream is not None
+
+    @property
+    def recording(self) -> bool:
+        return self._recording
+
+    @property
+    def level_db(self) -> float:
+        return self._level_db
+
+    @property
+    def seconds(self) -> float:
+        return self._frames / float(self._device_rate or 1)
+
+    # -- device ---------------------------------------------------------
+    def open(self) -> bool:
+        if self._stream is not None:
+            return True
+        try:
+            import sounddevice as sd
+
+            device = self.device
+            info = sd.query_devices(device, "input") if device is not None else \
+                sd.query_devices(kind="input")
+            self._device_rate = int(info.get("default_samplerate") or 48000)
+            blocksize = max(256, int(self._device_rate * self.block_ms / 1000))
+
+            def callback(indata, frames, _time, status):  # noqa: ANN001
+                if status:
+                    self._overflow += 1
+                data = indata[:, 0].copy() if indata.ndim > 1 else indata.copy()
+                rms = float(np.sqrt(np.mean(np.square(data)))) if data.size else 0.0
+                self._level_db = max(-90.0, 20.0 * float(np.log10(rms + 1e-12)))
+                with self._lock:
+                    if not self._recording:
+                        return
+                    if self._frames > self.max_seconds * self._device_rate:
+                        return
+                    self._take.append(data)
+                    self._frames += len(data)
+
+            self._stream = sd.InputStream(
+                samplerate=self._device_rate, channels=1, dtype="float32",
+                device=device, blocksize=blocksize, callback=callback)
+            self._stream.start()
+            log.info("microphone stream open (%d Hz, block %d ms)",
+                     self._device_rate, self.block_ms)
+            return True
+        except Exception as exc:  # noqa: BLE001
+            log.warning("cannot open microphone: %s", exc)
+            self._stream = None
+            return False
+
+    def close(self) -> None:
+        stream = self._stream
+        self._stream = None
+        self._recording = False
+        if stream is not None:
+            try:
+                stream.stop()
+                stream.close()
+            except Exception:
+                pass
+
+    # -- takes ----------------------------------------------------------
+    def start_take(self) -> bool:
+        if not self.open():
+            return False
+        with self._lock:
+            self._take = []
+            self._frames = 0
+            self._recording = True
+        return True
+
+    def stop_take(self) -> np.ndarray:
+        with self._lock:
+            self._recording = False
+            chunks = self._take
+            self._take = []
+            self._frames = 0
+        if not chunks:
+            return np.zeros(0, dtype=np.float32)
+        audio = wav.to_mono(np.concatenate(chunks))
+        if self._device_rate != self.sample_rate:
+            audio = wav.resample(audio, self._device_rate, self.sample_rate)
+        return audio
+
+    def abort_take(self) -> None:
+        with self._lock:
+            self._recording = False
+            self._take = []
+            self._frames = 0
+
+
 class Recorder:
-    """Records one utterance at the device rate, then returns 16 kHz mono."""
+    """Records one utterance at the device rate, then returns 16 kHz mono.
+
+    Kept for the training dialog, which records long takes while the main
+    input stream is paused.
+    """
 
     def __init__(self, sample_rate: int = 16000, channels: int = 1,
                  device: str | int | None = None, max_seconds: float = 40.0) -> None:
@@ -78,6 +203,12 @@ class Recorder:
         self._device_rate = self.sample_rate
         self._overflow = 0
         self._frames = 0
+        self._level_db = -90.0
+
+    @property
+    def level_db(self) -> float:
+        """Live input level of the take currently being recorded."""
+        return self._level_db
 
     @property
     def recording(self) -> bool:
@@ -101,6 +232,10 @@ class Recorder:
         def callback(indata, frames, _time, status):  # noqa: ANN001
             if status:
                 self._overflow += 1
+            data = np.asarray(indata, dtype=np.float32)
+            if data.size:
+                rms = float(np.sqrt(np.mean(data ** 2)))
+                self._level_db = max(-90.0, 20.0 * float(np.log10(rms + 1e-12)))
             with self._lock:
                 if not self._recording:
                     return

@@ -106,10 +106,6 @@ class MainWindow(QWidget):
         titles.addWidget(self.title)
         titles.addWidget(self.subtitle)
         header.addLayout(titles, 1)
-        self.warmup_button = QPushButton()
-        self.warmup_button.setObjectName("ghost")
-        self.warmup_button.clicked.connect(self.tray.warmup_models)
-        header.addWidget(self.warmup_button)
         self.train_button = QPushButton()
         self.train_button.setObjectName("ghost")
         self.train_button.clicked.connect(self.tray.open_training)
@@ -179,6 +175,13 @@ class MainWindow(QWidget):
         self.transcript.setMinimumHeight(150)
         self.transcript.setObjectName("transcript")
         root.addWidget(self.transcript, 1)
+
+        # warm-up sits right above the talk button
+        self.warmup_button = QPushButton()
+        self.warmup_button.setObjectName("ghost")
+        self.warmup_button.setMinimumHeight(32)
+        self.warmup_button.clicked.connect(self.tray.warmup_models)
+        root.addWidget(self.warmup_button)
 
         # actions
         actions = QHBoxLayout()

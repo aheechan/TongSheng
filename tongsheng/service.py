@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .asr import ASREngine, create_engine, engine_kind_for_language
-from .audio import MicMonitor, Recorder, StreamingPlayer
+from .audio import AudioInput, StreamingPlayer
 from .config import (AppConfig, normalize_language, normalize_language_output,
                      other_language, speaks_target)
 from .correct import Corrector, NullCorrector
@@ -85,10 +85,9 @@ class TongShengService:
         self._ready = threading.Event()
         self._warming = False
 
-        self.recorder = Recorder(sample_rate=config.audio.sample_rate,
-                                 device=config.audio.input_device,
-                                 max_seconds=config.audio.max_seconds)
-        self.monitor = MicMonitor(device=config.audio.input_device)
+        self.input = AudioInput(sample_rate=config.audio.sample_rate,
+                                device=config.audio.input_device,
+                                max_seconds=config.audio.max_seconds)
         self.player = StreamingPlayer(device=config.audio.output_device)
         self.tts = TTSRuntime(config, models, on_status=on_status)
         self.history: list[TurnResult] = []
@@ -172,11 +171,11 @@ class TongShengService:
         self._ready.set()
         self.on_status("ready")
         self._set_state(State.IDLE, "ready")
-        self.monitor.start()
+        self.input.open()
 
     # -- input level ----------------------------------------------------
     def mic_level(self) -> float:
-        return self.monitor.level_db
+        return self.input.level_db
 
     def _build_pipeline(self) -> None:
         cfg = self.config.llm
@@ -200,6 +199,10 @@ class TongShengService:
         """Unload ASR/TTS before a training run so it gets the whole GPU."""
         log.info("pausing models for training")
         try:
+            self.input.close()
+        except Exception:
+            pass
+        try:
             self.tts.unload()
         except Exception:
             pass
@@ -212,6 +215,7 @@ class TongShengService:
         self._asr_ready.clear()
 
     def resume_models(self) -> None:
+        self.input.open()
         language = self.config.language
         try:
             self.asr_engine(language).warmup()
@@ -226,6 +230,10 @@ class TongShengService:
 
     def shutdown(self) -> None:
         self.cancel()
+        try:
+            self.input.close()
+        except Exception:
+            pass
         try:
             self.tts.unload()
         except Exception:
@@ -320,44 +328,31 @@ class TongShengService:
             self.on_error("模型还在加载")
             return False
         self.player.stop()
-        self.monitor.stop()          # the recorder owns the mic now
-        try:
-            self.recorder.start()
-        except Exception as exc:  # noqa: BLE001
-            self.on_error(f"麦克风打开失败：{exc}")
-            self.monitor.start()
+        if not self.input.start_take():
+            self.on_error("麦克风打开失败，请检查输入设备")
             return False
         self._set_state(State.LISTENING, "listening")
         return True
 
     def end(self) -> None:
-        if not self.recorder.recording:
+        if not self.input.recording:
             return
-        samples = self.recorder.stop()
+        samples = self.input.stop_take()
         if samples.size < self.config.audio.sample_rate * 0.25:
             self._set_state(State.IDLE, "too short")
-            self.monitor.start()
             return
         self._run_async(samples)
 
     def abort_listening(self) -> None:
         """Drop the current take without transcribing (gesture was cancelled)."""
-        try:
-            self.recorder.abort()
-        except Exception:
-            pass
+        self.input.abort_take()
         if self._state == State.LISTENING:
             self._set_state(State.IDLE, "cancelled")
-        self.monitor.start()
 
     def cancel(self) -> None:
-        try:
-            self.recorder.abort()
-        except Exception:
-            pass
+        self.input.abort_take()
         self.player.stop()
         self.tts.stop()
-        self.monitor.start()
 
     # -- processing -----------------------------------------------------
     def _run_async(self, samples) -> None:  # noqa: ANN001
@@ -445,7 +440,6 @@ class TongShengService:
             time.sleep(0.2)
         finally:
             self._set_state(State.IDLE, "ready")
-            self.monitor.start()
 
     def _append_history(self, result: TurnResult) -> None:
         base = self.models.results or Path("results")

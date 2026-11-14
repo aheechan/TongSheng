@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QWidget
 from ..audio import wav
 from . import palette
 
-FLOOR_DB = -60.0
+FLOOR_DB = -50.0
 CEIL_DB = 0.0
 
 
@@ -75,6 +75,14 @@ class LevelMeter(QWidget):
             painter.setPen(Qt.NoPen)
             painter.setBrush(gradient)
             painter.drawRoundedRect(bar, 4, 4)
+
+        # ticks so an idle bar still looks like a meter
+        painter.setPen(QPen(QColor(palette.LINE), 1))
+        for db in (0, -10, -20, -30, -40):
+            ratio = (db - FLOOR_DB) / (CEIL_DB - FLOOR_DB)
+            y = rect.bottom() - int(span * ratio)
+            painter.drawLine(rect.left() + 1, y, rect.left() + 6, y)
+            painter.drawLine(rect.right() - 6, y, rect.right() - 1, y)
 
         # peak hold line
         peak_ratio = (self._peak - FLOOR_DB) / (CEIL_DB - FLOOR_DB)
