@@ -35,7 +35,20 @@ def _single_instance_guard() -> tuple[bool, object]:
     return True, server
 
 
+def _set_app_user_model_id() -> None:
+    """Tell Windows this is TongSheng, not "Python" (tray label, taskbar grouping)."""
+    if not sys.platform.startswith("win"):
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+    except Exception:
+        pass
+
+
 def run() -> int:
+    _set_app_user_model_id()
     config = load_config()
     models = config.resolve_models()
     setup_logging(models.logs)
@@ -59,6 +72,17 @@ def run() -> int:
         return 0
 
     tray = TongShengTray(app, config, models)
+
+    from .ui.main_window import MainWindow
+
+    window = MainWindow(tray)
+    tray.attach_window(window)
+    window.center_on_primary()
+    if not config.ui.start_minimized:
+        window.show()
+    else:
+        tray.notify("同声 TongSheng", "已在托盘运行，双击图标打开窗口")
+
     tray.service.start()
     _holder = holder  # keep the QLocalServer alive
     log.info("TongSheng started (mode=%s lang=%s)", config.mode, config.language)

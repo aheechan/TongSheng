@@ -29,8 +29,20 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
     "menu.open_results": {"zh": "打开录音目录", "en": "Open recordings"},
     "menu.reload_voice": {"zh": "重新加载音色", "en": "Reload voice"},
     "menu.check": {"zh": "自检…", "en": "Diagnostics…"},
+    "menu.open_window": {"zh": "打开主窗口", "en": "Open window"},
     "menu.quit": {"zh": "退出", "en": "Quit"},
     "menu.about": {"zh": "关于同声", "en": "About TongSheng"},
+
+    # ---- main window ---------------------------------------------------
+    "window.transcript_empty": {
+        "zh": "按住快捷键说完一句话，这里会显示识别、纠错与译文。",
+        "en": "Hold the hotkey and speak — recognition, correction and translation show up here.",
+    },
+    "window.still_running": {
+        "zh": "窗口已隐藏，程序仍在托盘运行。双击托盘图标可以再次打开。",
+        "en": "Window hidden — still running in the tray. Double-click the tray icon to reopen.",
+    },
+    "window.still_running_title": {"zh": "同声仍在运行", "en": "TongSheng is still running"},
 
     # ---- states --------------------------------------------------------
     "state.idle": {"zh": "待机", "en": "Idle"},

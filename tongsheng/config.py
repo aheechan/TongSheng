@@ -170,7 +170,7 @@ class UIConfig:
     mode: str = "live"              # live | rec
     hotkey: str = "ctrl+alt"        # push-to-talk chord
     hotkey_mode: str = "hold"       # hold | toggle
-    start_minimized: bool = True
+    start_minimized: bool = False   # False = show the control window on launch
     notify_translation: bool = True
 
 

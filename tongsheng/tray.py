@@ -162,7 +162,9 @@ class TongShengTray(QObject):
         self.tray.setToolTip(t("tray.tooltip.idle"))
         self.menu = QMenu()
         self.tray.setContextMenu(self.menu)
+        self.window = None
         self._build_menu()
+        self.tray.activated.connect(self._on_tray_activated)
 
         self.bridge.state.connect(self._on_state)
         self.bridge.turn.connect(self._on_turn)
@@ -226,6 +228,10 @@ class TongShengTray(QObject):
         self.menu.addMenu(self.voice_menu)
 
         self.menu.addSeparator()
+        self.open_action = QAction(t("menu.open_window"), self.menu)
+        self.open_action.triggered.connect(self.show_window)
+        self.menu.addAction(self.open_action)
+
         self.settings_action = QAction(t("menu.settings"), self.menu)
         self.settings_action.triggered.connect(self._open_settings)
         self.menu.addAction(self.settings_action)
@@ -251,10 +257,37 @@ class TongShengTray(QObject):
         self.voice_menu.setTitle(t("menu.voice"))
         self.talk_action.setText("🎙 " + t("menu.start"))
         self.status_action.setText(f"{t('menu.status')} · {t('state.idle')}")
+        self.open_action.setText(t("menu.open_window"))
         self.settings_action.setText(t("menu.settings"))
         self.history_action.setText(t("menu.history"))
         self.results_action.setText(t("menu.open_results"))
         self.quit_action.setText(t("menu.quit"))
+        if self.window is not None:
+            try:
+                self.window.retranslate()
+            except Exception:
+                pass
+
+    # -- window ---------------------------------------------------------
+    def attach_window(self, window) -> None:  # noqa: ANN001
+        self.window = window
+
+    def window_icon(self) -> QIcon:
+        return make_icon(128)
+
+    def show_window(self) -> None:
+        window = self.window
+        if window is None:
+            return
+        window.ensure_on_screen()
+        window.show_and_raise()
+
+    def _on_tray_activated(self, reason) -> None:  # noqa: ANN001
+        if reason in (QSystemTrayIcon.DoubleClick, QSystemTrayIcon.Trigger):
+            self.show_window()
+
+    def notify(self, title: str, message: str) -> None:
+        self._notify(title, message)
 
     def _fill_voices(self) -> None:
         self.voice_menu.clear()
@@ -320,6 +353,7 @@ class TongShengTray(QObject):
             self.service.set_voice(self.config.tts.voice)
             self._save()
             self._build_menu()
+            self._retranslate()
             self._install_hotkey()
 
     def _open_history(self) -> None:
@@ -412,6 +446,11 @@ class TongShengTray(QObject):
                 self._hotkey.stop()
         except Exception:
             pass
+        if self.window is not None:
+            try:
+                self.window.hide()
+            except Exception:
+                pass
         self.tray.hide()
         self.service.shutdown()
         self.app.quit()
