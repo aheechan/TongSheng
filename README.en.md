@@ -8,7 +8,9 @@ Say something with a hotkey held down. TongSheng recognises the speech, fixes
 recognition errors, translates it, and speaks the translation **in your own
 cloned voice**.
 
-- Chinese ⇄ English, switched from the tray (UI language *and* ASR model together)
+- Input language: Chinese / English — switching swaps the ASR engine and preloads it
+- Output language: all **15** languages Index-Translate supports; zh/en/ja/ko are spoken
+  in your cloned voice, the other 11 are text-only for now
 - Two output tiers: **LIVE 24 kHz** (streaming, latency first) and **REC 48 kHz**
   (whole-sentence, quality first)
 - Nothing leaves the machine: FunASR / faster-whisper → local LLM correction →
