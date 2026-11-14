@@ -33,6 +33,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
     "menu.check": {"zh": "自检…", "en": "Diagnostics…"},
     "menu.open_window": {"zh": "打开主窗口", "en": "Open window"},
     "menu.warmup": {"zh": "模型预热", "en": "Warm up models"},
+    "menu.hotkey_pause": {"zh": "暂停快捷键", "en": "Pause hotkey"},
     "warmup.running": {"zh": "正在预热模型…", "en": "Warming up models…"},
     "warmup.done": {"zh": "模型已就绪，可以开始说话", "en": "Models are ready — start talking"},
     "warmup.failed": {"zh": "预热失败：{message}", "en": "Warm-up failed: {message}"},

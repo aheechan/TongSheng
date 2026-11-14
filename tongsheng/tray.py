@@ -247,6 +247,11 @@ class TongShengTray(QObject):
         self.talk_action = QAction("🎙 " + t("menu.start"), self.menu)
         self.talk_action.triggered.connect(self._toggle_talk)
         self.menu.addAction(self.talk_action)
+
+        self.hotkey_pause_action = QAction(t("menu.hotkey_pause"), self.menu)
+        self.hotkey_pause_action.setCheckable(True)
+        self.hotkey_pause_action.triggered.connect(self._toggle_hotkey_pause)
+        self.menu.addAction(self.hotkey_pause_action)
         self.menu.addSeparator()
 
         # quality tier switch
@@ -345,6 +350,7 @@ class TongShengTray(QObject):
         self.status_action.setText(f"{t('menu.status')} · {t('state.idle')}")
         self.train_action.setText(t("train.title"))
         self.warmup_action.setText(t("menu.warmup"))
+        self.hotkey_pause_action.setText(t("menu.hotkey_pause"))
         self.open_action.setText(t("menu.open_window"))
         self.settings_action.setText(t("menu.settings"))
         self.history_action.setText(t("menu.history"))
@@ -374,6 +380,16 @@ class TongShengTray(QObject):
     def _on_tray_activated(self, reason) -> None:  # noqa: ANN001
         if reason in (QSystemTrayIcon.DoubleClick, QSystemTrayIcon.Trigger):
             self.show_window()
+
+    def _toggle_hotkey_pause(self, paused: bool) -> None:
+        if paused:
+            if self._hotkey is not None:
+                self._hotkey.stop()
+                self._hotkey = None
+            self._notify(t("app.name"), t("menu.hotkey_pause"))
+        else:
+            self._install_hotkey()
+            self._notify(t("app.name"), t("settings.hotkey"))
 
     def notify(self, title: str, message: str) -> None:
         self._notify(title, message)
@@ -531,7 +547,15 @@ class TongShengTray(QObject):
             log.warning("cannot save config: %s", exc)
 
     def _notify(self, title: str, message: str) -> None:
-        if message:
+        """Non-activating toast — never steal the caret from the target app."""
+        if not message:
+            return
+        try:
+            from .ui.toast import Toast
+
+            Toast.push(title, message)
+        except Exception:  # noqa: BLE001
+            log.debug("toast failed, falling back to tray balloon", exc_info=True)
             self.tray.showMessage(title, message, QSystemTrayIcon.Information, 4000)
 
     # -- hotkey ---------------------------------------------------------
@@ -546,6 +570,7 @@ class TongShengTray(QObject):
                 on_press=lambda: self.bridge.status.emit("hotkey-press"),
                 on_release=lambda: self.bridge.status.emit("hotkey-release"),
                 on_cancel=lambda: self.bridge.status.emit("hotkey-cancel"),
+                on_escape=lambda: self.bridge.status.emit("hotkey-escape"),
             )
             self._hotkey.start()
         except Exception as exc:  # noqa: BLE001
@@ -571,6 +596,10 @@ class TongShengTray(QObject):
             self.talk_action.setText("🎙 " + t("menu.start"))
 
     def _on_turn(self, turn: TurnResult) -> None:
+        # When the text is pasted straight into the focused field, do not pop a
+        # toast on top of it — that is what makes the caret jump/steal focus.
+        if self.config.pipeline.inject_text:
+            return
         if self.config.ui.notify_translation and turn.translation:
             body = turn.translation
             if len(body) > 180:
@@ -615,12 +644,25 @@ class TongShengTray(QObject):
                 self.window.set_warming(False)
         elif message == "hotkey-cancel":
             self._cancel_gesture()
+        elif message == "hotkey-escape":
+            self._escape_cancel()
 
     # -- hotkey gesture (project B style: tap latches, hold talks) --------
     def _cancel_gesture(self) -> None:
         self._stop_after_release = False
         self.service.abort_listening()
         self.talk_action.setText("🎙 " + t("menu.start"))
+
+    def _escape_cancel(self) -> None:
+        """ESC: drop the take / stop the speech, whatever stage we are in."""
+        if self.service.state == State.IDLE and not self.service.player.busy:
+            return
+        log.info("ESC pressed — cancelling")
+        self._stop_after_release = False
+        self.tray.setToolTip(t("tray.tooltip.idle"))
+        self.service.cancel()
+        self.talk_action.setText("🎙 " + t("menu.start"))
+        self.status_action.setText(f"{t('menu.status')} · {t('state.idle')}")
 
     def _on_hotkey_press(self) -> None:
         import time as _time

@@ -42,12 +42,26 @@ class KEYBDINPUT(ctypes.Structure):
                 ("dwExtraInfo", ULONG_PTR)]
 
 
+class MOUSEINPUT(ctypes.Structure):
+    """Present only so the INPUT union has the Win32 size (40 bytes on x64)."""
+
+    _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG),
+                ("mouseData", wintypes.DWORD), ("dwFlags", wintypes.DWORD),
+                ("time", wintypes.DWORD), ("dwExtraInfo", ULONG_PTR)]
+
+
 class _INPUTUNION(ctypes.Union):
-    _fields_ = [("ki", KEYBDINPUT)]
+    _fields_ = [("ki", KEYBDINPUT), ("mi", MOUSEINPUT)]
 
 
 class INPUT(ctypes.Structure):
     _fields_ = [("type", wintypes.DWORD), ("union", _INPUTUNION)]
+
+
+_user32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(INPUT), ctypes.c_int]
+_user32.SendInput.restype = wintypes.UINT
+
+_send_vk_lock = __import__("threading").Lock()
 
 
 def _send_vk(vk: int, up: bool = False) -> None:
@@ -55,7 +69,11 @@ def _send_vk(vk: int, up: bool = False) -> None:
     event = INPUT(type=INPUT_KEYBOARD,
                   union=_INPUTUNION(ki=KEYBDINPUT(wVk=vk, wScan=0, dwFlags=flags,
                                                   time=0, dwExtraInfo=0)))
-    ctypes.windll.user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(INPUT))
+    with _send_vk_lock:
+        sent = _user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(INPUT))
+    if not sent:
+        log.warning("SendInput failed for vk=0x%02X (err=%s)", vk,
+                    ctypes.get_last_error())
 
 
 def copy_to_clipboard(text: str) -> bool:

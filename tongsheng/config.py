@@ -188,6 +188,9 @@ class TTSConfig:
     voice: str = ""                 # selected voice profile id
     emotion: str = "natural"        # default prosody preset
     live_volume: float = 1.0        # 0.0 - 1.5, LIVE tier only
+    live_fragments: bool = False    # True = stream fragments (lower latency,
+                                    # risk of stitched syllables); False = whole
+                                    # sentence first, smooth playback
     tiers: dict[str, TierConfig] = field(default_factory=lambda: {
         "live": TierConfig(version="v3", sample_rate=24000, streaming=True,
                            fragment_interval=0.32, split_method="cut5", sample_steps=4),

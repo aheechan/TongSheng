@@ -210,7 +210,12 @@ class MicMonitor:
 
             self._stream = sd.InputStream(
                 samplerate=self._device_rate, channels=1, dtype="float32",
-                device=device, blocksize=0, callback=callback)
+                device=device,
+                # 100 ms blocks: a handful of callbacks per second keeps the GIL
+                # free for the keyboard hook and the UI (blocksize=0 can fire
+                # hundreds of times per second and starve every other thread).
+                blocksize=max(256, int(self._device_rate * 0.1)),
+                callback=callback)
             self._stream.start()
             return True
         except Exception as exc:  # noqa: BLE001

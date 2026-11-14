@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.wintypes as wintypes
+import queue
 import threading
 from dataclasses import dataclass, field
 from typing import Callable
@@ -104,6 +105,11 @@ def parse_combo(text: str) -> Combo:
 class HotkeyListener:
     """WH_KEYBOARD_LL based listener supporting hold-style push to talk.
 
+    The hook callback does **nothing but enqueue** the key event: work happens on
+    a worker thread. A low-level hook is called synchronously by the system
+    input thread, so any slow callback stalls the whole keyboard — this design
+    keeps the callback in the microsecond range.
+
     The hook never swallows keys (``CallNextHookEx`` always runs), so the
     shortcut co-exists with normal typing. If another key goes down while the
     gesture is active (Alt+Tab, Alt+F4, Ctrl+Alt+C …) the gesture is cancelled
@@ -113,20 +119,25 @@ class HotkeyListener:
     def __init__(self, combo: str = "ctrl+alt",
                  on_press: Callable[[], None] | None = None,
                  on_release: Callable[[], None] | None = None,
-                 on_cancel: Callable[[], None] | None = None) -> None:
+                 on_cancel: Callable[[], None] | None = None,
+                 on_escape: Callable[[], None] | None = None) -> None:
         self.combo = parse_combo(combo)
         self.on_press = on_press or (lambda: None)
         self.on_release = on_release or (lambda: None)
         self.on_cancel = on_cancel or (lambda: None)
+        self.on_escape = on_escape or (lambda: None)
         self._thread: threading.Thread | None = None
+        self._worker: threading.Thread | None = None
         self._stop = threading.Event()
         self._thread_id = 0
         self._down: set[int] = set()
         self._active = False
         self._cancelled = False
         self._hook = None
+        self._events: "queue.Queue[tuple[int, bool]]" = queue.Queue(maxsize=512)
+        self.slow_callbacks = 0
 
-    # -- state machine --------------------------------------------------
+    # -- state machine (worker thread) ----------------------------------
     def _is_pressed(self) -> bool:
         return self.combo.pressed(self._down)
 
@@ -137,7 +148,23 @@ class HotkeyListener:
             return False
         return True
 
+    def _worker_loop(self) -> None:
+        while not self._stop.is_set():
+            try:
+                vk, is_down = self._events.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            try:
+                self._handle(vk, is_down)
+            except Exception:
+                log.exception("hotkey state machine failed")
+
     def _handle(self, vk: int, is_down: bool) -> None:
+        if is_down and vk == 0x1B:      # ESC → cancel whatever is running
+            try:
+                self.on_escape()
+            except Exception:
+                log.exception("escape callback failed")
         if is_down:
             if self._active and self._is_foreign(vk) and not self._cancelled:
                 # another shortcut is being typed → do not dictate
@@ -177,6 +204,9 @@ class HotkeyListener:
         if self._thread is not None:
             return True
         self._stop.clear()
+        self._worker = threading.Thread(target=self._worker_loop, name="ts-hotkey-work",
+                                        daemon=True)
+        self._worker.start()
         self._thread = threading.Thread(target=self._run, name="ts-hotkey", daemon=True)
         self._thread.start()
         for _ in range(50):
@@ -195,13 +225,15 @@ class HotkeyListener:
             thread.join(timeout=1.5)
         self._thread = None
         self._thread_id = 0
+        self._worker = None
 
     def _run(self) -> None:
         user32 = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
         self._thread_id = kernel32.GetCurrentThreadId()
 
-        HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_int,
+        # LRESULT is pointer sized on x64; c_int would truncate it.
+        HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, ctypes.c_int,
                                       wintypes.WPARAM, wintypes.LPARAM)
 
         class KBDLLHOOKSTRUCT(ctypes.Structure):
@@ -210,17 +242,37 @@ class HotkeyListener:
                         ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong))]
 
         def callback(n_code, w_param, l_param):  # noqa: ANN001
+            # Keep this function trivial: it runs on the system input thread.
             if n_code == 0:
-                data = ctypes.cast(l_param, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
-                if not (data.flags & LLKHF_INJECTED):
-                    vk = normalise_vk(int(data.vkCode), int(data.flags))
-                    if w_param in (WM_KEYDOWN, WM_SYSKEYDOWN):
-                        self._handle(vk, True)
-                    elif w_param in (WM_KEYUP, WM_SYSKEYUP):
-                        self._handle(vk, False)
+                try:
+                    data = ctypes.cast(l_param, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
+                    if not (data.flags & LLKHF_INJECTED):
+                        vk = normalise_vk(int(data.vkCode), int(data.flags))
+                        if w_param in (WM_KEYDOWN, WM_SYSKEYDOWN):
+                            self._events.put_nowait((vk, True))
+                        elif w_param in (WM_KEYUP, WM_SYSKEYUP):
+                            self._events.put_nowait((vk, False))
+                except Exception:
+                    pass
             return user32.CallNextHookEx(None, n_code, w_param, l_param)
 
         self._proc = HOOKPROC(callback)
+        # Prototypes matter: without them LPARAM overflows and every keystroke
+        # raises inside the hook (which stalls the whole input pipeline).
+        user32.SetWindowsHookExW.argtypes = [ctypes.c_int, HOOKPROC,
+                                             wintypes.HINSTANCE, wintypes.DWORD]
+        user32.SetWindowsHookExW.restype = wintypes.HHOOK
+        user32.CallNextHookEx.argtypes = [wintypes.HHOOK, ctypes.c_int,
+                                          wintypes.WPARAM, wintypes.LPARAM]
+        user32.CallNextHookEx.restype = ctypes.c_ssize_t
+        user32.UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
+        user32.GetMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND,
+                                       wintypes.UINT, wintypes.UINT]
+        user32.GetMessageW.restype = ctypes.c_int
+        user32.TranslateMessage.argtypes = [ctypes.POINTER(wintypes.MSG)]
+        user32.DispatchMessageW.argtypes = [ctypes.POINTER(wintypes.MSG)]
+        user32.DispatchMessageW.restype = ctypes.c_ssize_t
+
         self._hook = user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._proc, None, 0)
         if not self._hook:
             log.error("SetWindowsHookExW failed: %s", ctypes.get_last_error())

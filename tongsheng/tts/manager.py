@@ -216,11 +216,30 @@ class TTSRuntime:
                 total_samples = audio.size
             else:
                 sentences = split_sentences(value, self.config.tts.max_chars_per_sentence, lang)
+                streaming = bool(self.config.tts.live_fragments)
                 for sentence in sentences:
                     if self._stop.is_set():
                         break
                     if on_sentence:
                         on_sentence(sentence)
+                    if not streaming:
+                        # Project A strategy: finish the whole sentence, then
+                        # play it. Slightly higher first-syllable latency, but
+                        # no stitched fragment artefacts ("单字延音").
+                        audio, sr = engine.synthesize_all(
+                            sentence, streaming=False,
+                            **{k: v for k, v in common.items()
+                               if k not in ("fragment_interval",)})
+                        if audio.size == 0:
+                            continue
+                        if sr != tier.sample_rate:
+                            audio = wavmod.resample(audio, sr, tier.sample_rate)
+                        if live_gain != 1.0:
+                            audio = np.clip(audio * live_gain, -1.0, 1.0).astype(np.float32)
+                        produced_sr = tier.sample_rate
+                        player.push(audio, produced_sr)
+                        total_samples += audio.size
+                        continue
                     for chunk, sr in engine.synthesize(
                             sentence, streaming=True,
                             fragment_interval=tier.fragment_interval, **common):
