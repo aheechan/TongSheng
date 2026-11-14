@@ -101,8 +101,11 @@
   并在后台预热 whisper。预热失败时会自动重启程序，让新语种成为启动时唯一加载的模型。
 - **输出语言**：默认跟随输入语言自动取反（中文→英文）；也可以手动锁定任意一种。
 - **音色**：列出 `voice-repository/` 下所有克隆音色，点击即用。
+- **模型预热**：一键把 ASR / TTS / 翻译服务全部加载好，避免第一句卡顿（启动时也会自动预热一次）。
 - **声音模型训练**：右上角按钮打开训练/音色管理窗口（新建音色、设为默认、删除）。
+- **输入电平表**：窗口右侧竖条实时显示麦克风电平（峰值保持），说话前先看它确认麦克风有信号。
 - **快捷键**：默认**左 Alt**——轻点锁定、长按说完松手（可在设置里改成右 Alt / Ctrl+Alt / Ctrl+Shift+Space）。
+  钩子只监听、不吞键：Alt+Tab、Alt+F4 这类组合会**自动取消录音**，不影响系统和其他软件。
 
 ---
 
@@ -192,7 +195,7 @@ LIVE 档找不到匹配的 v3 LoRA 时，会自动用 v3 底模 + 参考音频�
 | `tts.live_volume` | `1.0` | LIVE 档输出音量（0–1.5） |
 | `audio.output_device` | `null` | 声音输出通路（设备序号） |
 | `translate.style` | `daily` | `daily` / `live` / `business` / `subtitle` |
-| `pipeline.inject_text` | `false` | 译文同时粘贴到焦点窗口 |
+| `pipeline.inject_text` | `false` | 译文用 Ctrl+V 粘贴到光标处（对话框/聊天框/网页输入框），并自动恢复原剪贴板 |
 | `audio.input_device` | `null` | 麦克风名片段或序号 |
 
 配置文件的查找顺序：`--config` 参数 → 项目根 `config.yaml` → 内置 `config.example.yaml` 默认值。

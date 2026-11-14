@@ -32,6 +32,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
     "menu.reload_voice": {"zh": "重新加载音色", "en": "Reload voice"},
     "menu.check": {"zh": "自检…", "en": "Diagnostics…"},
     "menu.open_window": {"zh": "打开主窗口", "en": "Open window"},
+    "menu.warmup": {"zh": "模型预热", "en": "Warm up models"},
+    "warmup.running": {"zh": "正在预热模型…", "en": "Warming up models…"},
+    "warmup.done": {"zh": "模型已就绪，可以开始说话", "en": "Models are ready — start talking"},
+    "warmup.failed": {"zh": "预热失败：{message}", "en": "Warm-up failed: {message}"},
+    "meter.tooltip": {"zh": "麦克风输入电平（录音时实时显示）",
+                      "en": "Microphone input level (live while recording)"},
     "menu.quit": {"zh": "退出", "en": "Quit"},
     "menu.about": {"zh": "关于同声", "en": "About TongSheng"},
 

@@ -102,43 +102,75 @@ def parse_combo(text: str) -> Combo:
 
 
 class HotkeyListener:
-    """WH_KEYBOARD_LL based listener supporting hold-style push to talk."""
+    """WH_KEYBOARD_LL based listener supporting hold-style push to talk.
+
+    The hook never swallows keys (``CallNextHookEx`` always runs), so the
+    shortcut co-exists with normal typing. If another key goes down while the
+    gesture is active (Alt+Tab, Alt+F4, Ctrl+Alt+C …) the gesture is cancelled
+    instead of being treated as dictation.
+    """
 
     def __init__(self, combo: str = "ctrl+alt",
                  on_press: Callable[[], None] | None = None,
-                 on_release: Callable[[], None] | None = None) -> None:
+                 on_release: Callable[[], None] | None = None,
+                 on_cancel: Callable[[], None] | None = None) -> None:
         self.combo = parse_combo(combo)
         self.on_press = on_press or (lambda: None)
         self.on_release = on_release or (lambda: None)
+        self.on_cancel = on_cancel or (lambda: None)
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._thread_id = 0
         self._down: set[int] = set()
         self._active = False
+        self._cancelled = False
         self._hook = None
 
     # -- state machine --------------------------------------------------
     def _is_pressed(self) -> bool:
         return self.combo.pressed(self._down)
 
+    def _is_foreign(self, vk: int) -> bool:
+        if vk in self.combo.modifier_vks:
+            return False
+        if self.combo.key is not None and vk == self.combo.key:
+            return False
+        return True
+
     def _handle(self, vk: int, is_down: bool) -> None:
         if is_down:
+            if self._active and self._is_foreign(vk) and not self._cancelled:
+                # another shortcut is being typed → do not dictate
+                self._cancelled = True
+                try:
+                    self.on_cancel()
+                except Exception:
+                    log.exception("cancel callback failed")
             self._down.add(vk)
         else:
             self._down.discard(vk)
         pressed = self._is_pressed()
         if pressed and not self._active:
             self._active = True
+            self._cancelled = False
             try:
                 self.on_press()
             except Exception:
                 log.exception("press callback failed")
         elif not pressed and self._active:
             self._active = False
-            try:
-                self.on_release()
-            except Exception:
-                log.exception("release callback failed")
+            cancelled = self._cancelled
+            self._cancelled = False
+            if cancelled:
+                try:
+                    self.on_cancel()
+                except Exception:
+                    log.exception("cancel callback failed")
+            else:
+                try:
+                    self.on_release()
+                except Exception:
+                    log.exception("release callback failed")
 
     # -- hook -----------------------------------------------------------
     def start(self) -> bool:

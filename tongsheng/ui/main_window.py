@@ -21,6 +21,7 @@ from ..config import (LANGUAGES, MODE_LABELS, output_language_label,
                       output_languages, speaks_target)
 from ..service import State, TurnResult
 from . import palette
+from .meter import LevelMeter
 
 t = i18n.t
 
@@ -75,9 +76,22 @@ class MainWindow(QWidget):
 
     # -- layout ---------------------------------------------------------
     def _build(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(22, 20, 22, 18)
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        left = QWidget()
+        root = QVBoxLayout(left)
+        root.setContentsMargins(22, 20, 12, 18)
         root.setSpacing(14)
+        outer.addWidget(left, 1)
+
+        self.meter = LevelMeter(self.service.mic_level)
+        self.meter.setToolTip(t("meter.tooltip"))
+        meter_box = QVBoxLayout()
+        meter_box.setContentsMargins(0, 18, 12, 18)
+        meter_box.addWidget(self.meter, 1)
+        outer.addLayout(meter_box)
 
         header = QHBoxLayout()
         logo = QLabel()
@@ -92,6 +106,10 @@ class MainWindow(QWidget):
         titles.addWidget(self.title)
         titles.addWidget(self.subtitle)
         header.addLayout(titles, 1)
+        self.warmup_button = QPushButton()
+        self.warmup_button.setObjectName("ghost")
+        self.warmup_button.clicked.connect(self.tray.warmup_models)
+        header.addWidget(self.warmup_button)
         self.train_button = QPushButton()
         self.train_button.setObjectName("ghost")
         self.train_button.clicked.connect(self.tray.open_training)
@@ -269,8 +287,14 @@ class MainWindow(QWidget):
         else:
             self.service.begin()
 
+    def set_warming(self, warming: bool) -> None:
+        self.warmup_button.setEnabled(not warming)
+        self.warmup_button.setText(t("warmup.running") if warming else t("menu.warmup"))
+
     # -- service signals ------------------------------------------------
     def _on_state(self, state: str, _message: str) -> None:
+        if hasattr(self, "meter"):
+            self.meter.set_recording(state == "listening")
         mapping = {
             "idle": t("state.idle"), "listening": t("state.listening"),
             "working": t("state.asr"), "speaking": t("state.playing"),
@@ -309,6 +333,15 @@ class MainWindow(QWidget):
             self.hint.setText(t("notify.asr_warming", lang=language))
         elif message.startswith("asr-ready:"):
             self._update_hint()
+        elif message == "warmup:start":
+            self.set_warming(True)
+            self.hint.setText(t("warmup.running"))
+        elif message == "warmup:done":
+            self.set_warming(False)
+            self._update_hint()
+        elif message.startswith("warmup:failed:"):
+            self.set_warming(False)
+            self.hint.setText(t("warmup.failed", message=message.split(":", 2)[-1]))
 
     # -- i18n -----------------------------------------------------------
     def _update_hint(self) -> None:
@@ -337,6 +370,7 @@ class MainWindow(QWidget):
         self.mode_row.set_current(self.config.mode)
         self._fill_output_languages()
         self.talk_button.setText("🎙  " + t("menu.start"))
+        self.warmup_button.setText(t("menu.warmup"))
         self.train_button.setText(t("train.title"))
         self.settings_button.setText(t("menu.settings").replace("…", ""))
         self.history_button.setText(t("menu.history").replace("…", ""))

@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .asr import ASREngine, create_engine, engine_kind_for_language
-from .audio import Recorder, StreamingPlayer
+from .audio import MicMonitor, Recorder, StreamingPlayer
 from .config import (AppConfig, normalize_language, normalize_language_output,
                      other_language, speaks_target)
 from .correct import Corrector, NullCorrector
@@ -83,10 +83,12 @@ class TongShengService:
         self._corrector: Corrector | NullCorrector = NullCorrector()
         self._translator: Translator | None = None
         self._ready = threading.Event()
+        self._warming = False
 
         self.recorder = Recorder(sample_rate=config.audio.sample_rate,
                                  device=config.audio.input_device,
                                  max_seconds=config.audio.max_seconds)
+        self.monitor = MicMonitor(device=config.audio.input_device)
         self.player = StreamingPlayer(device=config.audio.output_device)
         self.tts = TTSRuntime(config, models, on_status=on_status)
         self.history: list[TurnResult] = []
@@ -115,6 +117,39 @@ class TongShengService:
         thread = threading.Thread(target=self._prepare, name="ts-prepare", daemon=True)
         thread.start()
 
+    def warmup(self) -> None:
+        """Explicit warm-up button: reload/preload every model in the chain."""
+        if self._warming:
+            return
+        self._warming = True
+        self.on_status("warmup:start")
+        threading.Thread(target=self._warm_models, name="ts-warmup", daemon=True).start()
+
+    def _warm_models(self) -> None:
+        try:
+            if self._servers is None and self.config.llm.servers.enabled:
+                self._servers = ServerManager.from_config(self.config, self.models)
+            if self._servers is not None and self._servers.servers:
+                self.on_status("warmup:servers")
+                errors = self._servers.start_all(self.on_status)
+                for err in errors:
+                    log.warning("server: %s", err)
+            self._build_pipeline()
+            language = self.config.language
+            self.on_status(f"asr-warming:{language}")
+            self.asr_engine(language).warmup()
+            self._asr_ready.add(language)
+            self._ready.set()
+            self.on_status(f"asr-ready:{language}")
+            self.on_status("warmup:tts")
+            self.tts.warmup(self.config.mode)
+            self.on_status("warmup:done")
+        except Exception as exc:  # noqa: BLE001
+            log.exception("warmup failed")
+            self.on_status(f"warmup:failed:{exc}")
+        finally:
+            self._warming = False
+
     def _prepare(self) -> None:
         if self._servers is not None and self._servers.servers:
             errors = self._servers.start_all(self.on_status)
@@ -137,6 +172,11 @@ class TongShengService:
         self._ready.set()
         self.on_status("ready")
         self._set_state(State.IDLE, "ready")
+        self.monitor.start()
+
+    # -- input level ----------------------------------------------------
+    def mic_level(self) -> float:
+        return self.monitor.level_db
 
     def _build_pipeline(self) -> None:
         cfg = self.config.llm
@@ -280,10 +320,12 @@ class TongShengService:
             self.on_error("模型还在加载")
             return False
         self.player.stop()
+        self.monitor.stop()          # the recorder owns the mic now
         try:
             self.recorder.start()
         except Exception as exc:  # noqa: BLE001
             self.on_error(f"麦克风打开失败：{exc}")
+            self.monitor.start()
             return False
         self._set_state(State.LISTENING, "listening")
         return True
@@ -294,8 +336,19 @@ class TongShengService:
         samples = self.recorder.stop()
         if samples.size < self.config.audio.sample_rate * 0.25:
             self._set_state(State.IDLE, "too short")
+            self.monitor.start()
             return
         self._run_async(samples)
+
+    def abort_listening(self) -> None:
+        """Drop the current take without transcribing (gesture was cancelled)."""
+        try:
+            self.recorder.abort()
+        except Exception:
+            pass
+        if self._state == State.LISTENING:
+            self._set_state(State.IDLE, "cancelled")
+        self.monitor.start()
 
     def cancel(self) -> None:
         try:
@@ -304,6 +357,7 @@ class TongShengService:
             pass
         self.player.stop()
         self.tts.stop()
+        self.monitor.start()
 
     # -- processing -----------------------------------------------------
     def _run_async(self, samples) -> None:  # noqa: ANN001
@@ -391,6 +445,7 @@ class TongShengService:
             time.sleep(0.2)
         finally:
             self._set_state(State.IDLE, "ready")
+            self.monitor.start()
 
     def _append_history(self, result: TurnResult) -> None:
         base = self.models.results or Path("results")

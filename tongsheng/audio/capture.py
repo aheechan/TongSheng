@@ -158,6 +158,80 @@ class Recorder:
             self._chunks = []
 
 
+class MicMonitor:
+    """Always-on input level meter (no buffering, just RMS).
+
+    It is paused while the recorder owns the device, so the two never fight
+    over the same microphone.
+    """
+
+    def __init__(self, device: str | int | None = None) -> None:
+        self.device = parse_device(device)
+        self._stream: Any = None
+        self._level_db = -90.0
+        self._peak_db = -90.0
+        self._lock = threading.Lock()
+        self._device_rate = 44100
+
+    @property
+    def level_db(self) -> float:
+        with self._lock:
+            return self._level_db
+
+    @property
+    def peak_db(self) -> float:
+        with self._lock:
+            return self._peak_db
+
+    @property
+    def running(self) -> bool:
+        return self._stream is not None
+
+    def start(self) -> bool:
+        if self._stream is not None:
+            return True
+        try:
+            import sounddevice as sd
+
+            device = self.device
+            info = sd.query_devices(device, "input") if device is not None else \
+                sd.query_devices(kind="input")
+            self._device_rate = int(info.get("default_samplerate") or 44100)
+
+            def callback(indata, _frames, _time, _status):  # noqa: ANN001
+                data = np.asarray(indata, dtype=np.float32)
+                if data.size == 0:
+                    return
+                rms = float(np.sqrt(np.mean(data ** 2)))
+                db = 20.0 * float(np.log10(rms + 1e-12))
+                with self._lock:
+                    self._level_db = db if db > -90 else -90
+                    self._peak_db = max(self._peak_db * 0.995, self._level_db)
+
+            self._stream = sd.InputStream(
+                samplerate=self._device_rate, channels=1, dtype="float32",
+                device=device, blocksize=0, callback=callback)
+            self._stream.start()
+            return True
+        except Exception as exc:  # noqa: BLE001
+            log.debug("mic monitor unavailable: %s", exc)
+            self._stream = None
+            return False
+
+    def stop(self) -> None:
+        stream = self._stream
+        self._stream = None
+        if stream is not None:
+            try:
+                stream.stop()
+                stream.close()
+            except Exception:
+                pass
+        with self._lock:
+            self._level_db = -90.0
+            self._peak_db = -90.0
+
+
 def record_for(seconds: float, sample_rate: int = 16000,
                device: str | int | None = None) -> np.ndarray:
     """Small helper for the diagnostics panel."""
@@ -172,4 +246,5 @@ def record_for(seconds: float, sample_rate: int = 16000,
         return recorder.stop()
 
 
-__all__ = ["Recorder", "InputDevice", "list_input_devices", "parse_device", "record_for"]
+__all__ = ["Recorder", "MicMonitor", "InputDevice", "list_input_devices",
+           "parse_device", "record_for"]

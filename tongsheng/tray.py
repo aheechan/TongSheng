@@ -305,6 +305,10 @@ class TongShengTray(QObject):
         self.menu.addMenu(self.voice_menu)
 
         self.menu.addSeparator()
+        self.warmup_action = QAction(t("menu.warmup"), self.menu)
+        self.warmup_action.triggered.connect(self.warmup_models)
+        self.menu.addAction(self.warmup_action)
+
         self.train_action = QAction(t("train.title"), self.menu)
         self.train_action.triggered.connect(self.open_training)
         self.menu.addAction(self.train_action)
@@ -340,6 +344,7 @@ class TongShengTray(QObject):
         self.talk_action.setText("🎙 " + t("menu.start"))
         self.status_action.setText(f"{t('menu.status')} · {t('state.idle')}")
         self.train_action.setText(t("train.title"))
+        self.warmup_action.setText(t("menu.warmup"))
         self.open_action.setText(t("menu.open_window"))
         self.settings_action.setText(t("menu.settings"))
         self.history_action.setText(t("menu.history"))
@@ -503,6 +508,11 @@ class TongShengTray(QObject):
             except Exception:
                 pass
 
+    def warmup_models(self) -> None:
+        self.service.warmup()
+        if self.window is not None:
+            self.window.set_warming(True)
+
     def _open_history(self) -> None:
         HistoryDialog(self.service.read_history(80)).exec()
 
@@ -535,6 +545,7 @@ class TongShengTray(QObject):
                 self.config.ui.hotkey,
                 on_press=lambda: self.bridge.status.emit("hotkey-press"),
                 on_release=lambda: self.bridge.status.emit("hotkey-release"),
+                on_cancel=lambda: self.bridge.status.emit("hotkey-cancel"),
             )
             self._hotkey.start()
         except Exception as exc:  # noqa: BLE001
@@ -592,8 +603,25 @@ class TongShengTray(QObject):
             self._notify(t("app.name"),
                          t("notify.text_only",
                            lang=output_language_label(code, self.config.language)))
+        elif message == "warmup:start":
+            self._notify(t("app.name"), t("warmup.running"))
+        elif message == "warmup:done":
+            self._notify(t("app.name"), t("warmup.done"))
+            if self.window is not None:
+                self.window.set_warming(False)
+        elif message.startswith("warmup:failed:"):
+            self._notify(t("state.error"), t("warmup.failed", message=message.split(":", 2)[-1]))
+            if self.window is not None:
+                self.window.set_warming(False)
+        elif message == "hotkey-cancel":
+            self._cancel_gesture()
 
     # -- hotkey gesture (project B style: tap latches, hold talks) --------
+    def _cancel_gesture(self) -> None:
+        self._stop_after_release = False
+        self.service.abort_listening()
+        self.talk_action.setText("🎙 " + t("menu.start"))
+
     def _on_hotkey_press(self) -> None:
         import time as _time
 

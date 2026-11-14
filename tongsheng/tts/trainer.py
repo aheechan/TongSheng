@@ -182,6 +182,8 @@ class CloneTrainer:
         if ref_text:
             (target / "reference.txt").write_text(ref_text + "\n", encoding="utf-8")
 
+        from ..text import detect_language
+
         profile = VoiceProfile(
             id=voice_id,
             name=name,
@@ -191,7 +193,7 @@ class CloneTrainer:
             sovits_rec=sovits_rel,
             reference="reference.wav",
             reference_text=ref_text,
-            reference_lang="zh",
+            reference_lang=detect_language(ref_text) if ref_text else "zh",
             created_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
             notes=f"trained from {dataset_dir}",
         )
