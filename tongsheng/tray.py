@@ -495,7 +495,12 @@ class TongShengTray(QObject):
             self._notify(t("menu.voice"), profile.name)
 
     def _toggle_talk(self) -> None:
-        if self.service.state in (State.LISTENING, State.WORKING, State.SPEAKING):
+        state = self.service.state
+        if state is State.LISTENING:
+            # finishing a take must process it — never silently discard audio
+            self.service.end()
+            self.talk_action.setText("🎙 " + t("menu.start"))
+        elif state in (State.WORKING, State.SPEAKING):
             self.service.cancel()
             self.talk_action.setText("🎙 " + t("menu.start"))
         else:
