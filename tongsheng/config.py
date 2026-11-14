@@ -102,11 +102,11 @@ MODE_LABELS: dict[str, dict[str, str]] = {
     "rec": {"zh": "录音模式（REC）", "en": "Recording mode (REC)"},
 }
 MODE_HINTS: dict[str, dict[str, str]] = {
-    "live": {"zh": "低档 24 kHz · 边说边译，延迟优先", "en": "24 kHz tier · stream while you speak, latency first"},
-    "rec": {"zh": "高档 48 kHz · 整句合成，音质优先", "en": "48 kHz tier · whole-sentence synthesis, quality first"},
+    "live": {"zh": "低延迟 · v4 四步 · 整句渲染", "en": "Low latency · v4, 4 steps · whole sentence"},
+    "rec": {"zh": "高保真 · v4 十二步 · 48 kHz", "en": "High fidelity · v4, 12 steps · 48 kHz"},
 }
 
-TIER_SAMPLE_RATES: dict[str, int] = {"live": 24000, "rec": 48000}
+TIER_SAMPLE_RATES: dict[str, int] = {"live": 48000, "rec": 48000}
 
 
 def normalize_language(code: str | None) -> str:
@@ -198,7 +198,7 @@ class TTSConfig:
                                     # risk of stitched syllables); False = whole
                                     # sentence first, smooth playback
     tiers: dict[str, TierConfig] = field(default_factory=lambda: {
-        "live": TierConfig(version="v3", sample_rate=24000, streaming=True,
+        "live": TierConfig(version="v4", sample_rate=48000, streaming=True,
                            fragment_interval=0.32, split_method="cut5", sample_steps=4),
         "rec": TierConfig(version="v4", sample_rate=48000, streaming=False,
                           fragment_interval=0.0, split_method="cut5", sample_steps=12),
@@ -361,6 +361,16 @@ class AppConfig:
                                                 f"127.0.0.1:{new_port}/")
         # empty target means "auto = the other language"
         self.translate.target_language = normalize_language_output(self.translate.target_language)
+        # 1.0.6: the LIVE tier used to fall back to a v3 base model because the
+        # trained voices only ship v4 LoRA — that made the low tier sound like a
+        # different person. Both tiers now speak with the *trained* v4 voice.
+        live_tier = self.tts.tiers.get("live")
+        if isinstance(live_tier, TierConfig):
+            if live_tier.version == "v3":
+                live_tier.version = "v4"
+            if live_tier.sample_rate == 24000:
+                live_tier.sample_rate = 48000
+
         # tiers may arrive as plain dicts from YAML
         normalized: dict[str, TierConfig] = {}
         for name in MODES:

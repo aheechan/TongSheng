@@ -25,7 +25,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.language, "zh")
         self.assertEqual(cfg.mode, "live")
         self.assertEqual(cfg.target_language, "en")
-        self.assertEqual(cfg.tier().sample_rate, 24000)
+        self.assertEqual(cfg.tier().sample_rate, 48000)
 
     def test_language_switch_changes_target(self) -> None:
         cfg = AppConfig()
@@ -53,7 +53,7 @@ class ConfigTests(unittest.TestCase):
 
     def test_tier_config_survives_yaml(self) -> None:
         cfg = AppConfig.load(ROOT / "config.example.yaml")
-        self.assertEqual(cfg.tts.tiers["live"].sample_rate, 24000)
+        self.assertEqual(cfg.tts.tiers["live"].sample_rate, 48000)
         self.assertEqual(cfg.tiers["rec"].version if hasattr(cfg, "tiers") else
                          cfg.tts.tiers["rec"].version, "v4")
 

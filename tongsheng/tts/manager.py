@@ -183,7 +183,10 @@ class TTSRuntime:
             result.error = f"参考音频不存在：{ref}"
             return result
         ref_text = profile.reference_text or ""
-        prompt_lang = profile.reference_lang if profile.reference_lang in ("zh", "en") else "zh"
+        # never trust a stale profile field: the prompt transcript's own language
+        # is what the front-end needs (a zh prompt on English audio ruins prosody)
+        prompt_lang = detect_language(ref_text) if ref_text else (
+            profile.reference_lang if profile.reference_lang in ("zh", "en") else "zh")
 
         emo_temp, emo_topk, emo_speed = emotion_preset(self.config.tts.emotion)
         base_speed = float(self.config.tts.speed or 1.0)

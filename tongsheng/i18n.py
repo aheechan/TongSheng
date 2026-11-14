@@ -110,7 +110,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
     "settings.cancel": {"zh": "取消", "en": "Cancel"},
     "settings.apply_restart": {"zh": "部分设置将在下次启动生效", "en": "Some changes apply on next start"},
     "settings.models_missing": {"zh": "未找到模型目录，请检查路径设置", "en": "Model folder not found — check the paths"},
-    "settings.quality.live": {"zh": "低档 · LIVE · 24 kHz", "en": "Low tier · LIVE · 24 kHz"},
+    "settings.quality.live": {"zh": "低延迟 · LIVE · v4 4 步", "en": "Low latency · LIVE · v4 4 steps"},
     "settings.quality.rec": {"zh": "高档 · REC · 48 kHz", "en": "High tier · REC · 48 kHz"},
 
     # ---- diagnostics ---------------------------------------------------
