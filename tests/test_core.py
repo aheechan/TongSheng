@@ -211,3 +211,23 @@ class HistoryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TranscriptTests(unittest.TestCase):
+    def test_same_language_is_not_printed_twice(self) -> None:
+        from tongsheng.service import TurnResult
+        from tongsheng.ui.main_window import format_turn
+
+        turn = TurnResult(source_lang="en", target_lang="en",
+                          raw="Hey there", translation="Hey there")
+        text = format_turn(turn)
+        self.assertEqual(text.count("Hey there"), 1)
+
+    def test_translation_is_shown(self) -> None:
+        from tongsheng.service import TurnResult
+        from tongsheng.ui.main_window import format_turn
+
+        turn = TurnResult(source_lang="zh", target_lang="en",
+                          raw="你好", translation="Hello")
+        text = format_turn(turn)
+        self.assertIn("ZH  你好", text)
+        self.assertIn("EN  Hello", text)

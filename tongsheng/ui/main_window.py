@@ -60,6 +60,24 @@ class ToggleRow(QWidget):
                 self._buttons[key].setText(label)
 
 
+def format_turn(turn: "TurnResult") -> str:
+    """One transcript block. Never print the same sentence twice: when no
+    translation happened (same language, or the translator echoed the input)
+    only the source line is shown."""
+    raw = (turn.raw or "").strip()
+    translation = (turn.translation or "").strip()
+    corrected = (turn.corrected or "").strip()
+
+    lines = [f"{turn.source_lang.upper()}  {raw}"] if raw else []
+    if corrected and corrected != raw:
+        lines.append(f"    ✎ {corrected}")
+    if translation and translation.lower() != raw.lower():
+        lines.append(f"{turn.target_lang.upper()}  {translation}")
+    if turn.error:
+        lines.append(f"    ! {turn.error}")
+    return "\n".join(lines)
+
+
 class MainWindow(QWidget):
     def __init__(self, tray: Any) -> None:
         super().__init__()
@@ -314,14 +332,11 @@ class MainWindow(QWidget):
             self.talk_button.setText("🎙  " + t("menu.start"))
 
     def _on_turn(self, turn: TurnResult) -> None:
-        lines = [self.transcript.toPlainText()] if self.transcript.toPlainText() else []
-        block = [f"{turn.source_lang.upper()}  {turn.raw}"]
-        if turn.corrected and turn.corrected != turn.raw:
-            block.append(f"    ✎ {turn.corrected}")
-        block.append(f"{turn.target_lang.upper()}  {turn.translation}")
-        if turn.error:
-            block.append(f"    ! {turn.error}")
-        lines.append("\n".join(block))
+        existing = self.transcript.toPlainText()
+        lines = [existing] if existing else []
+        block_text = format_turn(turn)
+        if block_text and block_text not in lines:
+            lines.append(block_text)
         self.transcript.setPlainText("\n\n".join(lines[-8:]))
         self.transcript.verticalScrollBar().setValue(
             self.transcript.verticalScrollBar().maximum())

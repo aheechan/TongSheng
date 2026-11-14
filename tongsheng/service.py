@@ -394,6 +394,16 @@ class TongShengService:
             if not result.raw:
                 self._set_state(State.IDLE, "no speech")
                 return
+            # whisper may recognise a language other than the selected one; use
+            # what it actually heard so the transcript is not mislabelled and
+            # the translation target follows suit
+            detected = str(asr.language or "").lower()
+            if detected in ("zh", "en") and detected != source:
+                log.info("ASR detected %s while input language is %s", detected, source)
+                source = detected
+                result.source_lang = source
+                target = normalize_language_output(cfg.target_language or "", source)
+                result.target_lang = target
 
             self._set_state(State.WORKING, "correct")
             correct_start = time.perf_counter()
