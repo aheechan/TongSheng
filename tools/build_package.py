@@ -84,14 +84,14 @@ def build_groups() -> list[Group]:
     groups.append(app)
 
     # 2. Python runtime
-    runtime = Group("Python 运行时", "runtime",
+    runtime = Group("Python 运行时", "",
                     skip=("models_cache",))
     if RUNTIME.is_dir():
         runtime.dirs.append((RUNTIME, "runtime"))
     groups.append(runtime)
 
     # 3. GPT-SoVITS code (no weights) + the pretrained set v4 actually loads
-    gsv_code = Group("GPT-SoVITS 代码", "GPT-SoVITS",
+    gsv_code = Group("GPT-SoVITS 代码", "",
                      skip=("pretrained_models", "GPT_weights", "SoVITS_weights"))
     if GSV.is_dir():
         for rel in ("GPT_SoVITS", "tools", "configs"):
@@ -102,19 +102,21 @@ def build_groups() -> list[Group]:
                 gsv_code.files.append((GSV / rel, f"GPT-SoVITS/{rel}"))
     groups.append(gsv_code)
 
-    pretrained = Group("v4 预训练权重", "GPT-SoVITS/GPT_SoVITS/pretrained_models")
+    pretrained = Group("v4 预训练权重", "")
     base = GSV / "GPT_SoVITS" / "pretrained_models"
     for rel in ("chinese-hubert-base", "chinese-roberta-wwm-ext-large",
                 "fast_langdetect", "gsv-v4-pretrained"):
         if (base / rel).exists():
-            pretrained.dirs.append((base / rel, rel))
+            pretrained.dirs.append(
+                (base / rel, f"GPT-SoVITS/GPT_SoVITS/pretrained_models/{rel}"))
     for rel in ("s1v3.ckpt",):
         if (base / rel).exists():
-            pretrained.files.append((base / rel, rel))
+            pretrained.files.append(
+                (base / rel, f"GPT-SoVITS/GPT_SoVITS/pretrained_models/{rel}"))
     groups.append(pretrained)
 
     # 4. ASR models
-    asr = Group("语音识别模型", "models/asr")
+    asr = Group("语音识别模型", "")
     scope = ASR_CACHE / "modelscope" / "models"
     if scope.is_dir():
         for entry in sorted(scope.iterdir()):
@@ -126,11 +128,11 @@ def build_groups() -> list[Group]:
     groups.append(asr)
 
     # 5. LLM weights
-    llm = Group("LLM 权重", "models/llm")
+    llm = Group("LLM 权重", "")
     for name in ("Qwen3-1.7B-Q8_0.gguf", "Index-Translate-2B.Q4_K_M.gguf"):
         path = ALT / "models" / name
         if path.exists():
-            llm.files.append((path, name))
+            llm.files.append((path, f"models/llm/{name}"))
     groups.append(llm)
 
     # 6. llama.cpp server
@@ -141,7 +143,7 @@ def build_groups() -> list[Group]:
     groups.append(llama)
 
     # 7. the shipped voice
-    voice = Group("Default_Voice 音色", "voice-repository/Default_Voice")
+    voice = Group("Default_Voice 音色", "")
     src = ROOT / "voice-repository" / "Default_Voice"
     if src.is_dir():
         voice.dirs.append((src, "voice-repository/Default_Voice"))
@@ -159,10 +161,26 @@ def build_groups() -> list[Group]:
     return groups
 
 
+def _force_remove(path: Path) -> None:
+    """Remove a tree even when files are read-only (winget DLLs are)."""
+
+    def retry(func, target, _exc):  # noqa: ANN001
+        try:
+            os.chmod(target, 0o666)
+        except OSError:
+            pass
+        try:
+            func(target)
+        except OSError:
+            pass
+
+    shutil.rmtree(path, onerror=retry)
+
+
 def stage(groups: list[Group], dest: Path) -> None:
     if dest.exists():
-        shutil.rmtree(dest)
-    dest.mkdir(parents=True)
+        _force_remove(dest)
+    dest.mkdir(parents=True, exist_ok=True)
 
     linked = copied = 0
 
@@ -179,11 +197,13 @@ def stage(groups: list[Group], dest: Path) -> None:
             copied += 1
 
     for group in groups:
+        base = dest / group.dest if group.dest else dest
         for src, rel in group.files:
-            link(src, dest / rel if rel else dest / src.name)
+            link(src, base / rel if rel else base / src.name)
         for root, rel in group.dirs:
             for path in _walk_files(root, group.skip):
-                link(path, dest / rel / path.relative_to(root))
+                # rel already carries the in-package prefix for this group
+                link(path, base / rel / path.relative_to(root))
     print(f"staged: {linked} hardlinked, {copied} copied -> {dest}")
 
 

@@ -15,7 +15,7 @@
 
 > 作者：**Ahee52**
 > 状态：**1.1.1**
-> 打包构建：**TongSheng-1.1.1** — 安装后约 **14.1 GB**，安装包约 **12.1 GB**（分 3 卷）
+> 打包构建：**TongSheng-1.1.1** — 安装后约 **14.1 GB**，安装包约 **12.2 GB**（分 3 卷）
 > 安装目录：`%ProgramFiles%\TongSheng`
 > 配置 / 日志：`<安装目录>\config.yaml`、`<安装目录>\logs\app.log`
 > 模型：`<安装目录>\GPT-SoVITS\GPT_SoVITS\pretrained_models`、`<安装目录>\models`
@@ -319,14 +319,13 @@ python tools\build_package.py --stage --iss
 | 组成 | MB |
 |---|---:|
 | Python 运行时（torch 4.19 / PySide6 / onnxruntime） | 5888 |
-| LLM 权重（Qwen3-1.7B Q8 + Index-Translate-2B Q4） | 3001 |
-| 语音识别模型（paraformer + ct-punc + whisper small） | 2676 |
-| v4 预训练权重（s2Gv4 / vocoder / roberta / hubert / langdetect / s1v3） | 1863 |
-| GPT-SoVITS 代码（含 G2PW） | 663 |
+| 语音识别模型（paraformer + ct-punc + whisper small） | 2681 |
+| LLM 权重（Qwen3-1.7B Q8 + Index-Translate-2B Q4） | 2995 |
+| GPT-SoVITS 代码 + v4 预训练权重 | 2527 |
 | Default_Voice 音色 | 221 |
-| llama-server + DLL | 101 |
-| 应用代码与文档 | 1 |
-| **合计** | **14413（约 14.1 GB）** |
+| llama-server + DLL | 168 |
+| 应用代码与文档 | 6 |
+| **合计** | **14480（约 14.1 GB）** |
 
 安装包按 0.86 压缩率估算约 **12.1 GB**。打包时**必须排除**：`logs/`、`results/`、`.git/`、
 `__pycache__/`、`GPT-SoVITS/TEMP/`、`GPT_weights_v3/`、`SoVITS_weights_v*/`、

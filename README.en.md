@@ -9,7 +9,7 @@ Audio never leaves the box.
 
 > Author: **Ahee52**
 > Status: **1.1.1**
-> Packaged build: **TongSheng-1.1.1** — ~14.1 GB installed, ~12.1 GB installer (3 slices)
+> Packaged build: **TongSheng-1.1.1** — ~14.1 GB installed, ~12.2 GB installer (3 slices)
 > Install dir: `%ProgramFiles%\TongSheng`
 > Config / logs: `<install>\config.yaml`, `<install>\logs\app.log`
 
@@ -150,13 +150,13 @@ when 7-Zip is present.
 | Component | MB |
 |---|---:|
 | Python runtime (torch / PySide6 / onnxruntime) | 5888 |
-| LLM weights (Qwen3-1.7B Q8 + Index-Translate 2B Q4) | 3001 |
-| ASR models (paraformer + ct-punc + whisper small) | 2676 |
-| v4 pretrained weights | 1863 |
-| GPT-SoVITS code (with G2PW) | 663 |
+| ASR models (paraformer + ct-punc + whisper small) | 2681 |
+| LLM weights (Qwen3-1.7B Q8 + Index-Translate 2B Q4) | 2995 |
+| GPT-SoVITS code + v4 pretrained weights | 2527 |
 | Default_Voice | 221 |
-| llama-server | 101 |
-| **Total** | **14413 (≈14.1 GB)** |
+| llama-server | 168 |
+| App code and docs | 6 |
+| **Total** | **14480 (≈14.1 GB)** |
 
 See [docs/INSTALLER-SIZE.md](docs/INSTALLER-SIZE.md) for the exclusion list (training artifacts,
 logs, the v3 vocoder, the duplicate ASR download).
