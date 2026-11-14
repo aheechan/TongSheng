@@ -1,0 +1,38 @@
+# ---------- python ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ---------- runtime data ----------
+config.yaml
+logs/
+results/
+voices/*/
+!voices/README.md
+*.wav
+*.log
+.tmp/
+
+# ---------- models (never commit weights) ----------
+models/
+*.pth
+*.ckpt
+*.gguf
+*.bin
+*.onnx
+
+# ---------- os / editor ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp

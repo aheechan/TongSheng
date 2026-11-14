@@ -1,0 +1,269 @@
+"""TTS runtime: pick a voice, a quality tier, and stream audio out."""
+
+from __future__ import annotations
+
+import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
+
+import numpy as np
+
+from ..audio import StreamingPlayer, wav as wavmod
+from ..config import AppConfig
+from ..logs import get_logger
+from ..paths import ModelPaths
+from ..text import detect_language, split_sentences
+from .engine import SovitsEngine, TTSError, detect_checkpoint_version
+from .voices import VoiceProfile, VoiceStore
+
+log = get_logger("tts")
+
+
+@dataclass
+class SpeechResult:
+    text: str
+    mode: str
+    sample_rate: int = 0
+    seconds: float = 0.0
+    path: Path | None = None
+    error: str = ""
+
+
+class TTSRuntime:
+    def __init__(self, config: AppConfig, models: ModelPaths,
+                 on_status: Callable[[str], None] | None = None) -> None:
+        self.config = config
+        self.models = models
+        self.store = VoiceStore(models.characters or Path("voices"))
+        self.on_status = on_status or (lambda _msg: None)
+        self._engines: dict[str, SovitsEngine] = {}
+        self._profile: VoiceProfile | None = None
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+
+    # -- voices ---------------------------------------------------------
+    def voices(self) -> list[VoiceProfile]:
+        return self.store.list()
+
+    def voice_id(self) -> str:
+        return self.config.tts.voice or ""
+
+    def current_voice(self) -> VoiceProfile | None:
+        if self._profile is not None:
+            return self._profile
+        profile = self.store.get(self.voice_id()) if self.voice_id() else None
+        if profile is None:
+            profile = self.store.first()
+        return profile
+
+    def set_voice(self, voice_id: str) -> VoiceProfile | None:
+        profile = self.store.get(voice_id)
+        if profile is None:
+            return None
+        self.config.tts.voice = profile.id
+        self._profile = profile
+        self.unload()
+        return profile
+
+    # -- engine ---------------------------------------------------------
+    def _engine(self, mode: str, profile: VoiceProfile) -> SovitsEngine:
+        tier = self.config.tier(mode)
+        if self.models.gpt_sovits is None:
+            raise TTSError("未找到 GPT-SoVITS 目录，请在设置中指定 paths.gpt_sovits")
+        gpt, sovits = self._checkpoints(mode, profile)
+        key = f"{mode}:{gpt}:{sovits}"
+        with self._lock:
+            engine = self._engines.get(key)
+            if engine is not None and engine.loaded:
+                return engine
+            if not self.config.tts.keep_both_tiers_loaded:
+                for other_key, other in list(self._engines.items()):
+                    if other_key != key:
+                        other.unload()
+                self._engines.clear()
+            engine = SovitsEngine(self.models.gpt_sovits, device=self.config.tts.device,
+                                  pretrained=self.models.pretrained)
+            self.on_status(f"loading voice ({mode})")
+            engine.load(gpt, sovits)
+            self._engines[key] = engine
+            return engine
+
+    def _checkpoints(self, mode: str, profile: VoiceProfile) -> tuple[str, str]:
+        """Tier checkpoint with a graceful fall back to the upstream base model."""
+        tier = self.config.tier(mode)
+        pretrained = self.models.pretrained
+        if pretrained is None:
+            raise TTSError("未找到预训练模型目录")
+        sovits = profile.checkpoint(mode)
+        if sovits and Path(sovits).exists():
+            detected = detect_checkpoint_version(self.models.gpt_sovits, sovits)
+            if detected != tier.version:
+                log.info("voice %s checkpoint is %s but tier %s needs %s; zero-shot base",
+                         profile.name, detected, mode, tier.version)
+                sovits = ""
+        else:
+            sovits = ""
+        if not sovits:
+            base = self._base_sovits(tier.version)
+            if base is None:
+                raise TTSError(f"缺少 {tier.version} 底模，无法合成")
+            sovits = str(base)
+        gpt = profile.gpt_path if profile.trained else ""
+        if not gpt or not Path(gpt).exists():
+            gpt = str(self._default_gpt())
+        return gpt, sovits
+
+    def _base_sovits(self, version: str) -> Path | None:
+        pretrained = self.models.pretrained
+        if pretrained is None:
+            return None
+        candidates = [
+            pretrained / "gsv-v4-pretrained" / "s2Gv4.pth",
+            pretrained / "s2Gv4.pth",
+        ] if version == "v4" else [pretrained / "s2Gv3.pth"]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _default_gpt(self) -> Path:
+        if self.models.pretrained is None:
+            raise TTSError("未找到预训练模型目录")
+        candidate = self.models.pretrained / "s1v3.ckpt"
+        if not candidate.exists():
+            raise TTSError(f"缺少 GPT 权重：{candidate}")
+        return candidate
+
+    def warmup(self, mode: str | None = None) -> None:
+        profile = self.current_voice()
+        if profile is None:
+            return
+        try:
+            self._engine(mode or self.config.mode, profile)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("warmup failed: %s", exc)
+
+    def unload(self) -> None:
+        with self._lock:
+            for engine in self._engines.values():
+                engine.unload()
+            self._engines.clear()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    # -- synthesis ------------------------------------------------------
+    def speak(self, text: str, mode: str, player: StreamingPlayer,
+              text_lang: str | None = None,
+              on_sentence: Callable[[str], None] | None = None) -> SpeechResult:
+        self._stop.clear()
+        profile = self.current_voice()
+        result = SpeechResult(text=text, mode=mode)
+        if profile is None:
+            result.error = "no voice"
+            return result
+        value = (text or "").strip()
+        if not value:
+            result.error = "empty text"
+            return result
+        tier = self.config.tier(mode)
+        try:
+            engine = self._engine(mode, profile)
+        except Exception as exc:  # noqa: BLE001
+            result.error = str(exc)
+            return result
+
+        lang = text_lang or detect_language(value)
+        ref = profile.reference_path
+        if not ref.exists():
+            result.error = f"参考音频不存在：{ref}"
+            return result
+        ref_text = profile.reference_text or ""
+        prompt_lang = profile.reference_lang if profile.reference_lang in ("zh", "en") else "zh"
+
+        common = dict(
+            ref_wav=str(ref),
+            ref_text=ref_text,
+            text_lang=lang,
+            prompt_lang=prompt_lang,
+            speed=self.config.tts.speed,
+            temperature=self.config.tts.temperature,
+            top_k=self.config.tts.top_k,
+            top_p=self.config.tts.top_p,
+            repetition_penalty=self.config.tts.repetition_penalty,
+            sample_steps=tier.sample_steps,
+            split_method=tier.split_method,
+            batch_size=tier.batch_size,
+        )
+        start = time.perf_counter()
+        total_samples = 0
+        produced_sr = tier.sample_rate
+        try:
+            if mode == "rec":
+                audio, sr = engine.synthesize_all(value, streaming=False, **common)
+                if audio.size == 0:
+                    result.error = "synthesis returned no audio"
+                    return result
+                audio = wavmod.resample(audio, sr, tier.sample_rate)
+                produced_sr = tier.sample_rate
+                result.path = self._save_recording(audio, produced_sr)
+                player.push(audio, produced_sr)
+                total_samples = audio.size
+            else:
+                sentences = split_sentences(value, self.config.tts.max_chars_per_sentence, lang)
+                for sentence in sentences:
+                    if self._stop.is_set():
+                        break
+                    if on_sentence:
+                        on_sentence(sentence)
+                    for chunk, sr in engine.synthesize(
+                            sentence, streaming=True,
+                            fragment_interval=tier.fragment_interval, **common):
+                        if self._stop.is_set():
+                            break
+                        if sr != tier.sample_rate:
+                            chunk = wavmod.resample(chunk, sr, tier.sample_rate)
+                        produced_sr = tier.sample_rate
+                        player.push(chunk, produced_sr)
+                        total_samples += chunk.size
+                player.wait()
+        except Exception as exc:  # noqa: BLE001
+            log.exception("synthesis failed")
+            result.error = f"{type(exc).__name__}: {exc}"
+            return result
+        result.sample_rate = produced_sr
+        result.seconds = total_samples / float(produced_sr or 1)
+        log.info("speak %s: %.1fs audio in %.1fs (%d Hz)", mode, result.seconds,
+                 time.perf_counter() - start, produced_sr)
+        return result
+
+    def synthesize_file(self, text: str, mode: str, path: str | Path,
+                        text_lang: str | None = None) -> Path:
+        profile = self.current_voice()
+        if profile is None:
+            raise TTSError("no voice selected")
+        tier = self.config.tier(mode)
+        engine = self._engine(mode, profile)
+        lang = text_lang or detect_language(text)
+        audio, sr = engine.synthesize_all(
+            text, str(profile.reference_path), profile.reference_text or "",
+            lang, profile.reference_lang,
+            streaming=False, speed=self.config.tts.speed,
+            temperature=self.config.tts.temperature, top_k=self.config.tts.top_k,
+            top_p=self.config.tts.top_p,
+            repetition_penalty=self.config.tts.repetition_penalty,
+            sample_steps=tier.sample_steps, split_method=tier.split_method)
+        audio = wavmod.resample(audio, sr, tier.sample_rate)
+        return wavmod.write_wav(path, audio, tier.sample_rate)
+
+    def _save_recording(self, audio: np.ndarray, sr: int) -> Path | None:
+        base = self.models.results or Path("results")
+        folder = base / "rec"
+        folder.mkdir(parents=True, exist_ok=True)
+        name = time.strftime("%Y%m%d-%H%M%S") + f"-{sr // 1000}k.wav"
+        return wavmod.write_wav(folder / name, audio, sr)
+
+
+__all__ = ["TTSRuntime", "SpeechResult"]

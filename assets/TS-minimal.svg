@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">TS 极简字母组合标志</title>
+  <desc id="desc">深蓝黑圆角方形图标。白色 T 以顶部网罩与 U 形支架构成一支麦克风，蓝色 S 以单线条完成字母组合。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0A1728"/>
+      <stop offset=".58" stop-color="#050C16"/>
+      <stop offset="1" stop-color="#07131F"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="300" y1="140" x2="440" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7AF5FF"/>
+      <stop offset=".45" stop-color="#35C5FF"/>
+      <stop offset="1" stop-color="#4268FF"/>
+    </linearGradient>
+    <linearGradient id="white" x1="150" y1="130" x2="230" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#C9E8FF"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#2F8DFF" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#2F8DFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="1.5" y="1.5" width="509" height="509" rx="110.5" fill="none" stroke="#18334F" stroke-width="1.5"/>
+  <circle cx="286" cy="270" r="205" fill="url(#glow)"/>
+
+  <!-- T / microphone -->
+  <g>
+    <rect x="96" y="132" width="196" height="62" rx="31" fill="url(#white)"/>
+    <g fill="#06101C" opacity=".62">
+      <rect x="130" y="149" width="5" height="28" rx="2.5"/>
+      <rect x="156" y="149" width="5" height="28" rx="2.5"/>
+      <rect x="182" y="149" width="5" height="28" rx="2.5"/>
+      <rect x="208" y="149" width="5" height="28" rx="2.5"/>
+      <rect x="234" y="149" width="5" height="28" rx="2.5"/>
+    </g>
+    <path d="M194 194 V 392" stroke="url(#white)" stroke-width="52" stroke-linecap="round"/>
+    <path d="M128 286 V 296 A 66 66 0 0 0 260 296 V 286" fill="none" stroke="url(#blue)" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <!-- S -->
+  <path d="M330 168
+           C 370 146 414 164 414 200
+           C 414 232 374 242 344 254
+           C 314 266 306 294 336 310
+           C 372 330 416 326 418 362
+           C 420 398 382 414 344 402"
+        fill="none" stroke="url(#blue)" stroke-width="44" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,91 @@
+# 同声 TongSheng — 配置示例 / example configuration
+# 复制为 config.yaml 后修改；不写也能跑（等同默认值）。
+# Copy to config.yaml and edit; the app runs fine without it.
+
+paths:
+  gpt_sovits: auto          # auto = 自动探测同级 PrivateVoice 仓库
+  characters: ""            # 留空 = <项目>/voices
+  asr_cache: auto           # FunASR / faster-whisper 缓存根目录
+  gguf: auto                # ALT-VoiceType/models
+  private_voice: auto
+  alt_voice: auto
+
+audio:
+  input_device: null        # 设备名片段或序号；null = 系统默认
+  output_device: null
+  sample_rate: 16000
+  max_seconds: 40
+  trim_silence: true
+
+asr:
+  zh_engine: funasr         # funasr | fake
+  en_engine: whisper        # whisper | funasr | fake
+  device: cuda
+  whisper_size: small
+  funasr_model: paraformer-zh
+  warmup: true
+
+tts:
+  device: cuda
+  speed: 1.0
+  temperature: 0.6
+  top_k: 5
+  top_p: 1.0
+  repetition_penalty: 1.9
+  max_chars_per_sentence: 50
+  keep_both_tiers_loaded: false
+  voice: ""                 # 音色 id，留空用第一个
+  tiers:
+    live:                   # 低档：同声传译，v3 24 kHz，流式
+      version: v3
+      sample_rate: 24000
+      streaming: true
+      fragment_interval: 0.32
+      split_method: cut5
+      sample_steps: 4
+    rec:                    # 高档：录音模式，v4 48 kHz，整句
+      version: v4
+      sample_rate: 48000
+      streaming: false
+      fragment_interval: 0.0
+      split_method: cut5
+      sample_steps: 12
+
+llm:
+  corrector:
+    enabled: true
+    base_url: http://127.0.0.1:8091/v1
+    model: qwen3-1.7b-instruct
+    model_path: auto
+    autostart: true
+  translator:
+    enabled: true
+    base_url: http://127.0.0.1:8092/v1
+    model: Index-Translate-9B
+    model_path: auto
+    autostart: true
+  servers:
+    enabled: true
+    binary: llama-server
+    gpu_layers: 99
+    context_size: 4096
+    startup_timeout_s: 90
+
+translate:
+  enabled: true
+  correct: true
+  style: daily              # daily | live | business | subtitle
+  max_edit_ratio: 0.35
+  glossary: {}
+
+ui:
+  language: zh              # zh | en —— 同时切换界面与识别语言
+  mode: live                # live | rec —— 托盘可切
+  hotkey: ctrl+alt
+  hotkey_mode: hold         # hold = 按住说话；toggle = 按一下开始/再按停止
+  start_minimized: true
+  notify_translation: true
+
+pipeline:
+  inject_text: false        # 译文同时粘贴到当前窗口
+  sentence_gap_ms: 60
