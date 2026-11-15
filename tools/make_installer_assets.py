@@ -85,7 +85,7 @@ sizes = [16, 24, 32, 48, 64, 128, 256]
 LOGO.save(OUT / "app.ico", format="ICO", sizes=[(s, s) for s in sizes])
 
 # copy into the staged package so shortcuts and the uninstall entry can use it
-staged = ROOT / "dist" / "TongSheng-1.1.1"
+staged = ROOT / "dist" / "TongSheng-1.1.2"
 if staged.is_dir():
     (staged / "app.ico").write_bytes((OUT / "app.ico").read_bytes())
 

@@ -8,8 +8,8 @@ ASR → correction → translation → GPT-SoVITS v4 voice cloning, entirely on 
 Audio never leaves the box.
 
 > Author: **Ahee52**
-> Status: **1.1.1**
-> Packaged build: **TongSheng-1.1.1-Setup** — ~14.1 GB installed, 10.6 GB installer (1 exe + 7 bins)
+> Status: **1.1.2**
+> Packaged build: **TongSheng-1.1.2-Setup** — ~14.1 GB installed, 10.6 GB installer (1 exe + 7 bins)
 > Install dir: `%ProgramFiles%\TongSheng`
 > Config / logs: `<install>\config.yaml`, `<install>\logs\app.log`
 
@@ -146,7 +146,7 @@ python tools\make_installer_assets.py
 ```
 
 The result lands in `dist\installer\` (10.64 GB total, LZMA2 ratio ~0.74): one 6 MB
-`TongSheng-1.1.1-Setup.exe`, seven `TongSheng-1.1.1-Setup-N.bin` slices of 1.77 GB (under
+`TongSheng-1.1.2-Setup.exe`, seven `TongSheng-1.1.2-Setup-N.bin` slices of 1.77 GB (under
 GitHub's 2 GB per-asset limit) and `SHA256SUMS.txt`.
 The wizard is English-only and uses the same dark artwork and microphone icon as the app.
 Upload the `.exe` **and every `.bin`** to the release - a missing slice aborts the install.

@@ -1,5 +1,22 @@
 ﻿# Changelog
 
+## 1.1.2 - 2026-11-15 (安装版无法启动)
+
+**打包版根本起不来**：模型发现只认开发机的同级仓库（PrivateVoice / ALT-VoiceType），
+安装到 `%ProgramFiles%\TongSheng` 后找不到 GPT-SoVITS 与模型，于是启动即失败。
+
+### Fixed
+- `paths.discover()` 优先识别**打包布局**：`<安装目录>\GPT-SoVITS`、
+  `<安装目录>\models\asr`、`<安装目录>\models\llm`，其次才回退到同级仓库
+- `resolve_llama_binary()` 优先使用随包分发的 `<安装目录>\llama\llama-server.exe`
+- FunASR 缓存改为标准的 `models\asr\modelscope\models\<模型>` 结构，
+  `MODELSCOPE_CACHE` 指向 `models\asr\modelscope`
+- `run.bat` 优先使用包内的 `runtime\python.exe`（以前只找 PrivateVoice 的运行时，
+  安装版必然失败）；失败时打印退出码与日志路径
+- 启动失败不再静默：缺失模型时弹出英文错误框（`pythonw` 没有控制台），
+  未捕获异常写入 `logs\crash.log` 并同样弹框
+- 安装包补上 `tools\`（启动器 `dev_run.py` 就在这里，之前漏打包导致快捷方式无效）
+
 ## 1.1.1 - 2026-11-14 (转录显示重复)
 
 ### Fixed

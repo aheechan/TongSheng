@@ -21,6 +21,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# g2p_en (English phonemes) needs NLTK data; the installer ships a copy next to
+# the application so a clean machine never tries to download it.
+_BUNDLED_NLTK = ROOT / "nltk_data"
+if _BUNDLED_NLTK.is_dir():
+    os.environ.setdefault("NLTK_DATA", str(_BUNDLED_NLTK))
+
 PRIVATE_VOICE_ENV = "TONGSHENG_PRIVATE_VOICE"
 ALT_VOICE_ENV = "TONGSHENG_ALT_VOICE"
 
@@ -102,7 +108,18 @@ def discover(private_voice: str | Path | None = None,
         else default_alt_voice_root()
 
     gpt_sovits = pretrained = asr_cache = whisper_dir = funasr_dir = None
-    if pv is not None:
+
+    # 1) packaged layout: everything sits next to the application code
+    packaged_gsv = _first([ROOT / "GPT-SoVITS"])
+    if packaged_gsv is not None:
+        gpt_sovits = packaged_gsv
+        pretrained = _first([packaged_gsv / "GPT_SoVITS" / "pretrained_models"])
+    bundled_models = ROOT / "models"
+    if (bundled_models / "asr").is_dir():
+        asr_cache = _existing(bundled_models / "asr")
+
+    # 2) development layout: reuse the sibling repositories
+    if pv is not None and gpt_sovits is None:
         gpt_sovits = _first([pv / "GPT-SoVITS"])
         if gpt_sovits is not None:
             pretrained = _first([gpt_sovits / "GPT_SoVITS" / "pretrained_models"])
@@ -113,11 +130,13 @@ def discover(private_voice: str | Path | None = None,
             pv / "models",
         ])
     if asr_cache is not None:
+        asr_cache = _existing(asr_cache)
         whisper_dir = _first([asr_cache / "whisper" / "faster-whisper-small",
                               asr_cache / "whisper"])
         funasr_dir = _first([asr_cache / "modelscope"])
 
-    gguf_dir = _first([av / "models"]) if av is not None else None
+    gguf_dir = _first([bundled_models / "llm"]) or (
+        _first([av / "models"]) if av is not None else None)
 
     return ModelPaths(
         gpt_sovits=gpt_sovits,
@@ -148,7 +167,10 @@ def _voice_repository() -> Path:
 
 
 def resolve_llama_binary(configured: str = "llama-server") -> str:
-    """Resolve ``llama-server`` from config, PATH, a bundled runtime or winget."""
+    """Resolve ``llama-server``: bundled copy first, then config / PATH / winget."""
+    bundled = ROOT / "llama" / "llama-server.exe"
+    if bundled.is_file():
+        return str(bundled)
     if configured:
         candidate = Path(configured)
         if candidate.is_file():

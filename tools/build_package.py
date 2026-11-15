@@ -74,7 +74,7 @@ def build_groups() -> list[Group]:
 
     # 1. application code + docs
     app = Group("TongSheng 代码与文档", "")
-    for rel in ("tongsheng", "docs", "tests"):
+    for rel in ("tongsheng", "tools", "docs", "tests"):
         if (ROOT / rel).is_dir():
             app.dirs.append((ROOT / rel, rel))
     for rel in ("run.bat", "README.md", "README.en.md", "CHANGELOG.md",
@@ -121,7 +121,8 @@ def build_groups() -> list[Group]:
     if scope.is_dir():
         for entry in sorted(scope.iterdir()):
             if entry.is_dir():
-                asr.dirs.append((entry, f"models/asr/{entry.name}"))
+                asr.dirs.append(
+                    (entry, f"models/asr/modelscope/models/{entry.name}"))
     whisper = ASR_CACHE / "whisper" / "faster-whisper-small"
     if whisper.is_dir():
         asr.dirs.append((whisper, "models/asr/whisper/faster-whisper-small"))
@@ -136,11 +137,18 @@ def build_groups() -> list[Group]:
     groups.append(llm)
 
     # 6. llama.cpp server
-    llama = Group("llama-server", "llama")
+    llama = Group("llama-server", "")
     source = _llama_dir()
     if source is not None:
         llama.dirs.append((source, "llama"))
     groups.append(llama)
+
+    # 6b. NLTK data required by the English front-end (g2p_en)
+    nltk_src = Path(os.environ.get("APPDATA", "")) / "nltk_data"
+    nltk = Group("NLTK 数据（英文音素）", "")
+    if nltk_src.is_dir():
+        nltk.dirs.append((nltk_src, "nltk_data"))
+    groups.append(nltk)
 
     # 7. the shipped voice
     voice = Group("Default_Voice 音色", "")

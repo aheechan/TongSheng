@@ -68,12 +68,39 @@ def _install_crash_handler(models: ModelPaths | None) -> None:
     sys.excepthook = hook
 
 
+def show_error(title: str, message: str) -> None:
+    """Visible failure even when launched through pythonw.exe (no console)."""
+    log.error("%s: %s", title, message)
+    if not sys.platform.startswith("win"):
+        print(f"{title}\n{message}", file=sys.stderr)
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(None, message, title, 0x10 | 0x0)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def run() -> int:
     _set_app_user_model_id()
     config = load_config()
     models = config.resolve_models()
     setup_logging(models.logs)
     _install_crash_handler(models)
+
+    missing = models.missing_core()
+    if missing:
+        found = models.as_dict()
+        show_error(
+            "TongSheng - installation incomplete",
+            "TongSheng cannot find its model folders.\n\n"
+            f"Missing: {', '.join(missing)}\n"
+            f"Searched under: {Path(__file__).resolve().parents[1]}\n\n"
+            "Reinstall from the setup package, or point config.yaml at the\n"
+            "GPT-SoVITS and models folders (paths.gpt_sovits / paths.asr_cache).\n\n"
+            f"Found: {found}")
+        return 2
 
     from PySide6.QtWidgets import QApplication
 
