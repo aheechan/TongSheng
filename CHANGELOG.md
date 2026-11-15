@@ -1,5 +1,30 @@
 ﻿# Changelog
 
+## 1.1.9 - 2026-11-15 (8 GB 显存目标 + 崩溃根除)
+
+### 目标改为 8 GB 显卡可用
+
+| 档位 | 判据 | 行为 |
+|---|---|---|
+| `8gb` | 总显存 < 10 GB | ASR + TTS 常驻（≈3.1 GB）；纠错/翻译**按需启动**，空闲 90 秒自动停；不预热 LLM |
+| `12gb` | < 18 GB | 全部常驻 |
+| `24gb` | ≥ 18 GB | 全部常驻，翻译可用 9B（仅当包内存在该文件） |
+
+- 新增 `tongsheng/vram.py`：读 `torch.cuda.mem_get_info` 自动选档，`runtime.profile: auto`
+- 新增 `service.ensure_servers()` / `release_servers_if_idle()`：LLM 按需拉起与回收，
+  8 GB 卡峰值从约 7 GB 降到约 6.2 GB，空闲回到 3.1 GB
+- 翻译模型默认改为 **Index-Translate-2B**（9B 只在 24 GB 且文件存在时使用）
+- **训练门禁**：< 12 GB 的卡直接提示“显存不足，请在 12 GB+ 机器训练，
+  再把 voice-repository/<音色> 目录拷过来”，不再假装能跑
+- 自检新增 `GPU budget profile` 一项，直接显示档位与训练是否允许
+
+### 崩溃根除（Qt6Core 0xc0000409）
+
+- `TrainWorker` 不再在 `_reset()` 里被置空：改为 `finished → deleteLater()` 并保留引用
+- 取消 / 关闭训练窗口时 `cancel()` + `wait(5000)`，`TrainingDialog.closeEvent` 也会等待
+- 训练开始前 `pause_models()` 现在**同时停掉 llama-server**，训练独占 GPU
+- `resume_models()` 覆盖正常、取消、异常三条路径
+
 ## 1.1.8 - 2026-11-15 (完全按项目 A 的调用方式，重新出完整安装包)
 
 ### 复盘：为什么 1.1.6/1.1.7 还是失败

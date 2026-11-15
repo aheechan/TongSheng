@@ -85,6 +85,10 @@ class TongShengService:
         self._ready = threading.Event()
         self._warming = False
         self._turn_id = 0
+        self._server_lock = threading.Lock()
+        from .vram import detect
+
+        self.budget = detect()
 
         self.input = AudioInput(sample_rate=config.audio.sample_rate,
                                 device=config.audio.input_device,
@@ -110,8 +114,49 @@ class TongShengService:
         return self._ready.is_set()
 
     # -- lifecycle ------------------------------------------------------
+    def _apply_profile(self) -> None:
+        """8 GB cards keep only ASR + TTS resident; the LLM starts on demand."""
+        if self.config.runtime.profile != "auto":
+            try:
+                self.budget.profile = self.config.runtime.profile
+            except Exception:  # noqa: BLE001
+                pass
+        endpoint = self.config.llm.translator
+        if endpoint.model.lower().endswith("9b"):
+            available = False
+            gguf_dir = getattr(self.models, "gguf_dir", None)
+            if gguf_dir is not None:
+                available = any("9b" in item.name.lower()
+                                for item in Path(gguf_dir).glob("*.gguf"))
+            if self.budget.profile != "24gb" or not available:
+                endpoint.model = "Index-Translate-2B"
+                log.info("translator -> Index-Translate-2B (profile %s, 9B %s)",
+                         self.budget.profile,
+                         "present" if available else "not bundled")
+        log.info("runtime profile %s (%s)", self.budget.profile, self.budget.describe())
+
+    def ensure_servers(self) -> None:
+        """Start the local LLM servers when a translation actually needs them."""
+        with self._server_lock:
+            if self._servers is None or not self._servers.servers:
+                return
+            if self.budget.llm_resident:
+                return
+            for error in self._servers.start_all(self.on_status):
+                log.warning("server: %s", error)
+
+    def release_servers_if_idle(self, idle_seconds: float) -> None:
+        """8 GB profile: drop the LLM servers again after a quiet period."""
+        if self.budget.llm_resident or self._servers is None:
+            return
+        if self._state is not State.IDLE or self.player.busy:
+            return
+        with self._server_lock:
+            self._servers.stop_all()
+
     def start(self) -> None:
         self._set_state(State.IDLE, "starting")
+        self._apply_profile()
         if self.config.llm.servers.enabled:
             self._servers = ServerManager.from_config(self.config, self.models)
         thread = threading.Thread(target=self._prepare, name="ts-prepare", daemon=True)
@@ -151,7 +196,7 @@ class TongShengService:
             self._warming = False
 
     def _prepare(self) -> None:
-        if self._servers is not None and self._servers.servers:
+        if self._servers is not None and self._servers.servers and self.budget.llm_resident:
             errors = self._servers.start_all(self.on_status)
             for err in errors:
                 log.warning("server: %s", err)
@@ -197,8 +242,13 @@ class TongShengService:
 
     # -- GPU handover (training needs the VRAM) ---------------------------
     def pause_models(self) -> None:
-        """Unload ASR/TTS before a training run so it gets the whole GPU."""
-        log.info("pausing models for training")
+        """Unload ASR/TTS/LLM before a training run so it gets the whole GPU."""
+        log.info("pausing models for training (profile %s)", self.budget.profile)
+        if self._servers is not None:
+            try:
+                self._servers.stop_all()
+            except Exception:  # noqa: BLE001
+                pass
         try:
             self.input.close()
         except Exception:
@@ -228,6 +278,8 @@ class TongShengService:
                 self.tts.warmup(self.config.mode)
             except Exception as exc:  # noqa: BLE001
                 log.warning("TTS reload after training failed: %s", exc)
+        if self.budget.llm_resident:
+            self.ensure_servers()
 
     def shutdown(self) -> None:
         self.cancel()
@@ -413,6 +465,7 @@ class TongShengService:
                 target = normalize_language_output(cfg.target_language or "", source)
                 result.target_lang = target
 
+            self.ensure_servers()
             self._set_state(State.WORKING, "correct")
             correct_start = time.perf_counter()
             correction = self._corrector.correct(

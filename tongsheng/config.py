@@ -254,6 +254,13 @@ class LLMEndpoint:
 
 
 @dataclass
+class RuntimeConfig:
+    """GPU budget: ``auto`` reads the card and picks 8gb / 12gb / 24gb."""
+
+    profile: str = "auto"
+
+
+@dataclass
 class ServersConfig:
     enabled: bool = True
     binary: str = "llama-server"
@@ -268,7 +275,7 @@ class LLMConfig:
     corrector: LLMEndpoint = field(default_factory=lambda: LLMEndpoint(
         base_url="http://127.0.0.1:8093/v1", model="qwen3-1.7b-instruct", max_tokens=512))
     translator: LLMEndpoint = field(default_factory=lambda: LLMEndpoint(
-        base_url="http://127.0.0.1:8094/v1", model="Index-Translate-9B", max_tokens=384))
+        base_url="http://127.0.0.1:8094/v1", model="Index-Translate-2B", max_tokens=384))
     servers: ServersConfig = field(default_factory=ServersConfig)
 
 
@@ -307,6 +314,7 @@ class AppConfig:
     audio: AudioConfig = field(default_factory=AudioConfig)
     asr: ASRConfig = field(default_factory=ASRConfig)
     tts: TTSConfig = field(default_factory=TTSConfig)
+    runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     translate: TranslateConfig = field(default_factory=TranslateConfig)
     ui: UIConfig = field(default_factory=UIConfig)

@@ -70,6 +70,14 @@ def main() -> int:
             raise RuntimeError(f"only {total:.1f} GB VRAM - 6 GB is the minimum")
         return f"{name}, {total:.1f} GB, sm_{cap[0]}{cap[1]}"
 
+    def profile_line() -> str:
+        from tongsheng.vram import detect
+
+        budget = detect()
+        return (f"{budget.profile} - LLM "
+                f"{'resident' if budget.llm_resident else 'on demand'}, "
+                f"training {'allowed' if budget.training_allowed else 'needs 12 GB+'}")
+
     def models_present() -> str:
         missing = models.missing_core()
         for label, path in (("gpt_sovits", models.gpt_sovits),
@@ -171,6 +179,7 @@ def main() -> int:
 
     ok = True
     ok &= check("Python / torch runtime", runtime)
+    ok &= check("GPU budget profile", profile_line)
     ok &= check("NVIDIA GPU + VRAM", gpu)
     ok &= check("Model folders and v4 weights", models_present)
     ok &= check("llama-server binary", llama)

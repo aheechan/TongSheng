@@ -43,6 +43,13 @@ class TrainWorker(QThread):
     def run(self) -> None:  # noqa: D102
         service = self.service
         try:
+            budget = getattr(service, "budget", None)
+            if budget is not None and not budget.training_allowed:
+                self.failed.emit(
+                    "本机显存不足（%.0f GB）：音色训练需要 12 GB 以上。\n"
+                    "可在 12 GB+ 的机器上训练，然后把 voice-repository/<音色> 整个目录"
+                    "拷到本机即可使用。" % budget.total_gb)
+                return
             service.pause_models()
             trainer = CloneTrainer(
                 service.config, service.models,
@@ -322,16 +329,41 @@ class NewVoiceTab(QWidget):
         self.progress.setVisible(True)
         self._append(t("train.running"))
 
-        self._worker = TrainWorker(self.service, name, self._source)
-        self._worker.progress.connect(self._on_progress)
-        self._worker.finished_ok.connect(self._on_done)
-        self._worker.failed.connect(self._on_failed)
-        self._worker.start()
+        worker = TrainWorker(self.service, name, self._source)
+        worker.progress.connect(self._on_progress)
+        worker.finished_ok.connect(self._on_done)
+        worker.failed.connect(self._on_failed)
+        worker.finished.connect(self._on_thread_finished)
+        self._worker = worker
+        worker.start()
 
     def _cancel(self) -> None:
-        if self._worker is not None:
-            self._worker.cancel()
+        worker = self._worker
+        if worker is not None:
+            worker.cancel()
             self._append("cancel requested")
+
+    def _wait_worker(self, timeout_ms: int = 5000) -> None:
+        """Stop and reap the worker before the dialog (or the object) goes away.
+
+        Dropping the last reference to a running QThread makes Qt abort with
+        "QThread: Destroyed while thread is still running" (0xc0000409).
+        """
+        worker = self._worker
+        if worker is None:
+            return
+        try:
+            worker.cancel()
+        except Exception:  # noqa: BLE001
+            pass
+        if worker.isRunning():
+            worker.wait(timeout_ms)
+
+    def _on_thread_finished(self) -> None:
+        worker = self._worker
+        if worker is not None:
+            worker.deleteLater()
+        self._worker = None
 
     def _append(self, message: str) -> None:
         self.log.appendPlainText(message)
@@ -359,10 +391,15 @@ class NewVoiceTab(QWidget):
         self.cancel.setEnabled(False)
         self.progress.setVisible(False)
         self.progress.setRange(0, 0)
-        self._worker = None
+        # the worker is reaped by _on_thread_finished(); never None it here
 
 
 class TrainingDialog(QDialog):
+    def closeEvent(self, event) -> None:  # noqa: N802, ANN001
+        for tab in self.findChildren(NewVoiceTab):
+            tab._wait_worker()
+        super().closeEvent(event)
+
     def __init__(self, tray) -> None:
         super().__init__()
         self.tray = tray
