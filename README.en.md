@@ -140,12 +140,15 @@ Português, Italiano, العربية, Tiếng Việt, ไทย, Bahasa Indonesi
 ## Packaging
 
 ```bat
-python tools\build_package.py --stage --iss
+python tools\build_package.py --stage
+python tools\make_installer_assets.py
+"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\TongSheng.iss
 ```
 
-`--stage` collects the exact file list into `dist/TongSheng-<version>/` (hardlinks on the same
-volume), `--iss` emits an Inno Setup script with 4 GB slices, `--archive` produces 7z volumes
-when 7-Zip is present.
+The result lands in `dist\installer\`: one ~6 MB `TongSheng-1.1.1-Setup.exe` plus
+`TongSheng-1.1.1-Setup-N.bin` slices of 1.8 GB (each stays under GitHub's 2 GB per-asset limit).
+The wizard is English-only and uses the same dark artwork and microphone icon as the app.
+Upload the `.exe` **and every `.bin`** to the release - a missing slice aborts the install.
 
 | Component | MB |
 |---|---:|

@@ -306,13 +306,26 @@ voice-repository/<id>/
 ## 打包
 
 ```bat
-python tools\build_package.py --stage --iss
+:: 1) 收集文件（硬链接，先退出正在运行的同声）
+python tools\build_package.py --stage
+
+:: 2) 生成安装向导素材（深色卡片 + 应用图标）
+python tools\make_installer_assets.py
+
+:: 3) 编译安装包（英文向导，1.9 GB 分卷，适配 GitHub Releases 单文件 2 GB 上限）
+"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\TongSheng.iss
 ```
 
-- `--stage`：按清单把文件收集到 `dist/TongSheng-<版本>/`（同盘使用硬链接，几乎不占额外空间），
-  并写出 `dist/pack-manifest.json` 与体积报表
-- `--iss`：生成 `dist/TongSheng.iss`（Inno Setup，LZMA2，4 GB 分卷）
-- `--archive`：装了 7-Zip 时直接产出分卷压缩包
+产物在 `dist\installer\`：
+
+```
+TongSheng-1.1.1-Setup.exe      约 6 MB    引导程序
+TongSheng-1.1.1-Setup-1.bin    约 1.8 GB  数据分卷 …
+TongSheng-1.1.1-Setup-8.bin
+```
+
+安装界面为**纯英文**，配色与图标跟随本项目（深色卡片 + TS 麦克风图标）。
+上传 GitHub Release 时把 `.exe` 和所有 `.bin` 一起放进去，缺一卷都装不上。
 
 实测体积（仅 `Default_Voice`）：
 
