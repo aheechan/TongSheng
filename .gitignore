@@ -36,3 +36,6 @@ desktop.ini
 .idea/
 .vscode/
 *.swp
+
+training/
+voice-repository/index.json
