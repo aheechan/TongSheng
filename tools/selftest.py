@@ -124,14 +124,16 @@ def main() -> int:
         kind = engine_kind_for_language(cfg, cfg.language)
         engine = create_engine(kind, cfg, cfg.language, models)
         engine.load()
+        active = getattr(engine, "active", engine)
         result = engine.transcribe(np.zeros(16000, dtype=np.float32), 16000)
         if result.error:
             raise RuntimeError(result.error)
-        device = str(getattr(engine, "device", "?"))
+        device = str(getattr(active, "device", getattr(engine, "device", "?")))
         if kind == "funasr" and not device.startswith("cuda"):
             raise RuntimeError(
                 f"FunASR fell back to {device}; the GPU path must work (see logs)")
-        return f"{kind} loaded on {device}"
+        name = getattr(active, "name", kind)
+        return f"{name} loaded on {device}"
 
     def synthesis() -> str:
         from tongsheng.tts import TTSRuntime

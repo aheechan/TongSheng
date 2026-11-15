@@ -59,6 +59,14 @@ class FallbackEngine(ASREngine):
         self.name = self.secondary.name
         log.warning("ASR switched to %s (GPU fallback)", self.secondary.name)
 
+    @property
+    def device(self) -> str:
+        for engine in (self.active, self.primary):
+            value = getattr(engine, "device", None)
+            if value:
+                return str(value)
+        return "?"
+
     def transcribe(self, samples: np.ndarray, sample_rate: int = 16000) -> ASRResult:
         self.load()
         assert self.active is not None

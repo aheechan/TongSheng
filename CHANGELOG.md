@@ -1,5 +1,22 @@
 ﻿# Changelog
 
+## 1.1.5 - 2026-11-15 (FunASR 真正修复：按目录加载；升级包定位原安装目录)
+
+### Fixed
+- **`'NoneType' object is not callable` 的真正原因**：FunASR 的 `build_model()` 里
+  `model_class = tables.model_classes.get(kwargs["model"])` 取不到值时就是 None，
+  下一行 `model_class(...)` 必然报这个错。之前的代码把 **模型名**（`paraformer-zh`）
+  交给 FunASR，它会先走“名称 → 本地目录”的解析；只要解析出来的目录里没有
+  `config.yaml`（缓存布局不同、缺文件、或走了 Hub 分支），`kwargs["model"]` 就还是名字，
+  注册表里查不到 → None。
+  现在**直接把本地模型目录传给 FunASR**（`.../snapshots/master`），跳过名称解析；
+  目录里没有 `config.yaml` 时明确报错并说明缺哪个文件。
+- **升级包装错位置**：升级包原来固定装到 `%ProgramFiles%\TongSheng`，而安装在
+  `D:\TongSheng` 的用户完全没被更新。现在从卸载注册表读取原安装目录，找不到才回退。
+- **默认音色丢失无法恢复**：升级包现在附带 `Default_Voice`，用 `onlyifdoesntexist`
+  写入——缺就补，已有的（包括自己训练的音色）绝不覆盖。
+- 自检里 ASR 项在“引擎兜底”包装下会误报 `fell back to ?`，已修正为报告真实引擎与设备。
+
 ## 1.1.4 - 2026-11-15 (50 系显卡的语音识别兜底，不再卡死)
 
 ### Fixed

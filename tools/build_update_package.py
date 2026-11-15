@@ -65,6 +65,14 @@ def main() -> int:
             shutil.copy2(path, dest)
             total += dest.stat().st_size
 
+    voice = ROOT / "voice-repository" / "Default_Voice"
+    if voice.is_dir():
+        for path in walk(voice):
+            dest = target / "voice-repository" / "Default_Voice" / path.relative_to(voice)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, dest)
+            total += dest.stat().st_size
+
     for rel in INCLUDE_FILES:
         src = ROOT / rel
         if src.is_file():

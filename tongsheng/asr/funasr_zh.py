@@ -31,6 +31,39 @@ class FunASREngine(ASREngine):
         self._model = None
         self._lock = threading.Lock()
 
+    _DIR_HINTS = {
+        "paraformer-zh": "iic--speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        "ct-punc": "iic--punc_ct-transformer_cn-en-common-vocab471067-large",
+    }
+
+    def _local_model_dir(self, name: str) -> Path | None:
+        """Find a bundled model folder (config.yaml + weights), if present.
+
+        Passing the *directory* to FunASR skips its name->hub lookup entirely.
+        On one machine that lookup returned a path without ``config.yaml``, so
+        ``tables.model_classes.get(...)`` was None and AutoModel died with
+        ``'NoneType' object is not callable``.
+        """
+        if not self.model_cache:
+            return None
+        root = Path(self.model_cache)
+        if root.name == "modelscope":
+            root = root / "models"
+        elif (root / "modelscope" / "models").is_dir():
+            root = root / "modelscope" / "models"
+        hint = self._DIR_HINTS.get(name)
+        candidates: list[Path] = []
+        if hint:
+            candidates.append(root / hint)
+        candidates += [p for p in root.glob(f"*{name}*") if p.is_dir()] if root.is_dir() else []
+        for candidate in candidates:
+            for base in (candidate / "snapshots" / "master", candidate,
+                         candidate / "snapshots"):
+                if (base / "config.yaml").is_file() and (
+                        (base / "model.pt").is_file() or (base / "model.pb").is_file()):
+                    return base
+        return None
+
     def _prepare_env(self) -> None:
         if self.model_cache:
             base = Path(self.model_cache)
@@ -69,12 +102,22 @@ class FunASREngine(ASREngine):
                     raise
                 wants_cuda = False
 
+        model_arg: object = self.model_id
+        local = self._local_model_dir(self.model_id)
+        if local is not None:
+            model_arg = str(local)
+            log.info("using bundled FunASR model at %s", local)
+        else:
+            log.warning("no bundled model folder for %s; falling back to the hub name",
+                        self.model_id)
+
         base_kwargs: dict[str, object] = {
-            "model": self.model_id,
+            "model": model_arg,
             "disable_update": True,
         }
         if self.punc_model:
-            base_kwargs["punc_model"] = self.punc_model
+            punc = self._local_model_dir(self.punc_model)
+            base_kwargs["punc_model"] = str(punc) if punc is not None else self.punc_model
 
         # Same code path as project A (AutoModel(device=...)) plus a small
         # compatibility ladder for newer cards: an explicit device index and a
