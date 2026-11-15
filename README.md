@@ -15,7 +15,7 @@
 
 > 作者：**Ahee52**
 > 状态：**1.1.1**
-> 打包构建：**TongSheng-1.1.1** — 安装后约 **14.1 GB**，安装包约 **12.2 GB**（分 3 卷）
+> 打包构建：**TongSheng-1.1.1-Setup** — 安装后约 **14.1 GB**，安装包 **10.6 GB**（1 个 exe + 7 个 bin）
 > 安装目录：`%ProgramFiles%\TongSheng`
 > 配置 / 日志：`<安装目录>\config.yaml`、`<安装目录>\logs\app.log`
 > 模型：`<安装目录>\GPT-SoVITS\GPT_SoVITS\pretrained_models`、`<安装目录>\models`
@@ -316,12 +316,14 @@ python tools\make_installer_assets.py
 "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\TongSheng.iss
 ```
 
-产物在 `dist\installer\`：
+产物在 `dist\installer\`（实测 10.64 GB，LZMA2 压缩率约 0.74）：
 
 ```
-TongSheng-1.1.1-Setup.exe      约 6 MB    引导程序
-TongSheng-1.1.1-Setup-1.bin    约 1.8 GB  数据分卷 …
-TongSheng-1.1.1-Setup-8.bin
+TongSheng-1.1.1-Setup.exe      6.1 MB     引导程序（含图标与英文向导）
+TongSheng-1.1.1-Setup-1.bin    1.77 GB    数据分卷 1
+TongSheng-1.1.1-Setup-2…6.bin  1.77 GB    数据分卷 2–6
+TongSheng-1.1.1-Setup-7.bin    28 MB      数据分卷 7
+SHA256SUMS.txt                            校验和
 ```
 
 安装界面为**纯英文**，配色与图标跟随本项目（深色卡片 + TS 麦克风图标）。
