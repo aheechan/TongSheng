@@ -1,5 +1,24 @@
 ﻿# Changelog
 
+## 1.1.4 - 2026-11-15 (50 系显卡的语音识别兜底，不再卡死)
+
+### Fixed
+- **RTX 50 系上 FunASR 起不来导致“预热卡住、识别中不动、训练卡在分段”**：
+  FunASR 在 `cuda` / `cuda:0` / lazy 三种方式下都抛 `'NoneType' object is not callable`，
+  而 1.1.3 取消了 CPU 兜底，于是 ASR 永远加载不出来。
+  现在改为**同一块 GPU 上的引擎兜底**：
+  1. 先试 FunASR（Paraformer）
+  2. 失败则自动切到 faster-whisper（同一块显卡，已随包分发）
+  3. 仍然失败才报错，并给出驱动/引擎指引
+  可用 `asr.gpu_fallback: ""` 关闭兜底；`asr.allow_cpu_fallback` 依旧默认关闭。
+- FunASR 每次加载失败都会把**完整堆栈**写进 `logs/app.log`（之前只有一行摘要）。
+
+### Added
+- `tools/asr_probe.py`：一键诊断——打印 torch/CUDA 能力、FunASR 三种加载方式的完整
+  traceback、whisper 兜底是否可用，最后给出结论。
+- **升级包** `TongSheng-1.1.4-Update.exe`（2.2 MB）：只替换代码、工具与文档，
+  不动模型/音色/配置，装在已有安装目录上即可。
+
 ## 1.1.3 - 2026-11-15 (合成与训练在安装版可用，新增安装后自检)
 
 ### Fixed

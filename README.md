@@ -14,8 +14,8 @@
 **中文** | [English](README.en.md)
 
 > 作者：**Ahee52**
-> 状态：**1.1.3**
-> 打包构建：**TongSheng-1.1.3-Setup** — 安装后约 **14.1 GB**，安装包 **10.67 GB**（1 个 exe + 7 个 bin）
+> 状态：**1.1.4**
+> 打包构建：**TongSheng-1.1.3-Setup**（1.1.4 提供 2.2 MB 升级包） — 安装后约 **14.1 GB**，安装包 **10.67 GB**（1 个 exe + 7 个 bin）
 > 安装目录：`%ProgramFiles%\TongSheng`
 > 配置 / 日志：`<安装目录>\config.yaml`、`<安装目录>\logs\app.log`
 > 模型：`<安装目录>\GPT-SoVITS\GPT_SoVITS\pretrained_models`、`<安装目录>\models`

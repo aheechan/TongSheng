@@ -70,7 +70,7 @@ centred("Your voice,", 196, caption, (150, 172, 193, 255))
 centred("any language.", 208, caption, (150, 172, 193, 255))
 
 centred("local  ·  offline  ·  GPT-SoVITS v4", 258, caption, (104, 124, 143, 255))
-centred("v1.1.3", 276, caption, (104, 124, 143, 255))
+centred("v1.1.4", 276, caption, (104, 124, 143, 255))
 
 panel.convert("RGB").save(OUT / "wizard_image.bmp", format="BMP")
 
@@ -85,7 +85,7 @@ sizes = [16, 24, 32, 48, 64, 128, 256]
 LOGO.save(OUT / "app.ico", format="ICO", sizes=[(s, s) for s in sizes])
 
 # copy into the staged package so shortcuts and the uninstall entry can use it
-staged = ROOT / "dist" / "TongSheng-1.1.3"
+staged = ROOT / "dist" / "TongSheng-1.1.4"
 if staged.is_dir():
     (staged / "app.ico").write_bytes((OUT / "app.ico").read_bytes())
 

@@ -111,7 +111,7 @@ class FunASREngine(ASREngine):
             except Exception as exc:  # noqa: BLE001
                 last = exc
                 log.warning("FunASR load failed on %s: %s", label, exc)
-                log.debug("FunASR %s failure detail", label, exc_info=True)
+                log.error("FunASR %s failure detail", label, exc_info=True)
 
         detail = f"{type(last).__name__}: {last}" if last else "no device available"
         raise EngineUnavailable(
