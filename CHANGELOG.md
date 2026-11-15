@@ -1,5 +1,28 @@
 ﻿# Changelog
 
+## 1.1.3 - 2026-11-15 (合成与训练在安装版可用，新增安装后自检)
+
+### Fixed
+- **英文合成失败**：打包时 `nltk_data` 用了硬链接，NLTK 3.9 的安全检查发现
+  `st_nlink=2`，直接抛 `Security Violation [pathsec.open]`，所有英文合成全部失败。
+  现在 `nltk_data` 与 `app/` 一律**复制**打包（不再链接）。
+- **训练报错「未找到项目A训练模块」**：安装包缺少 `app/core/train.py`。
+  现在随包分发项目 A 的 `app/` 训练后端（几百 KB），`CloneTrainer` 开箱可用。
+- **安装目录不可写**：`%ProgramFiles%\TongSheng` 对普通用户只读，导致日志、
+  配置、训练数据集写不进去。新增 `paths.user_root()`：安装目录可写就用它，
+  否则自动落到 `%LOCALAPPDATA%\TongSheng`（配置、日志、录音、自训音色都在那里）。
+- **多占 950 MB**：`MODELSCOPE_CACHE` 被设成了 `models\asr`（父目录），ModelScope 找不到
+  模型就复制了一份 paraformer。现在指向 `models\asr\modelscope`，不再重复占盘。
+- FunASR 在 CUDA 上失败时保留完整堆栈（`--verbose` / 日志 debug），便于定位
+  50 系显卡上的 `'NoneType' object is not callable`。
+
+### Added
+- **安装后自检 `tools/selftest.py`**（参照项目 A）：
+  Python/torch、GPU 与显存、模型目录与 v4 权重、llama-server、音频端点、
+  英文音素（NLTK）、ASR 加载、英文合成、训练后端，逐项 PASS/FAIL，
+  报告写到 `logs\selftest.txt`，退出码非 0 表示有故障。
+  安装向导结束页提供「Run the self-test now」，开始菜单也有 **Self-test**。
+
 ## 1.1.2 - 2026-11-15 (安装版无法启动)
 
 **打包版根本起不来**：模型发现只认开发机的同级仓库（PrivateVoice / ALT-VoiceType），

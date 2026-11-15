@@ -43,6 +43,41 @@ def _existing(path: str | Path | None) -> Path | None:
     return None
 
 
+def _writable(path: Path) -> bool:
+    """True when we can create files in ``path`` (Program Files often says no)."""
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / f".ts-write-{os.getpid()}"
+        probe.write_text("x", encoding="utf-8")
+        probe.unlink()
+        return True
+    except OSError:
+        return False
+
+
+_USER_ROOT: Path | None = None
+
+
+def user_root() -> Path:
+    """Writable home for config / logs / results / trained voices."""
+    global _USER_ROOT
+    if _USER_ROOT is not None:
+        return _USER_ROOT
+    env = os.environ.get("TONGSHENG_DATA")
+    if env:
+        candidate = Path(env).expanduser()
+        candidate.mkdir(parents=True, exist_ok=True)
+        _USER_ROOT = candidate
+        return _USER_ROOT
+    if _writable(ROOT):
+        _USER_ROOT = ROOT
+        return _USER_ROOT
+    base = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "TongSheng"
+    base.mkdir(parents=True, exist_ok=True)
+    _USER_ROOT = base
+    return _USER_ROOT
+
+
 def _first(paths: list[Path | None]) -> Path | None:
     for path in paths:
         found = _existing(path)
@@ -146,8 +181,8 @@ def discover(private_voice: str | Path | None = None,
         whisper_dir=whisper_dir,
         funasr_dir=funasr_dir,
         gguf_dir=gguf_dir,
-        logs=ROOT / "logs",
-        results=ROOT / "results",
+        logs=user_root() / "logs",
+        results=user_root() / "results",
     )
 
 
@@ -157,13 +192,18 @@ def _voice_repository() -> Path:
     Older builds used ``voices/``; if that is the only folder present we keep
     using it until the user migrates.
     """
-    new = ROOT / "voice-repository"
-    if new.is_dir():
-        return new
-    legacy = ROOT / "voices"
-    if legacy.is_dir():
-        return legacy
-    return new
+    bundled = ROOT / "voice-repository"
+    if bundled.is_dir() and _writable(bundled):
+        return bundled
+    data = user_root() / "voice-repository"
+    if not data.exists() and bundled.is_dir():
+        # first run on a read-only install: keep the shipped voice available
+        try:
+            shutil.copytree(bundled, data, dirs_exist_ok=True)
+        except OSError:
+            pass
+    data.mkdir(parents=True, exist_ok=True)
+    return data
 
 
 def resolve_llama_binary(configured: str = "llama-server") -> str:

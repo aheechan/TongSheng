@@ -476,8 +476,11 @@ def default_config_path() -> Path:
     if override:
         return Path(override)
     # portable first: keep the config next to the project so a copy of the
-    # folder carries its settings (and the README stays accurate)
-    return path_mod.ROOT / "config.yaml"
+    # folder carries its settings; fall back to %LOCALAPPDATA% when the
+    # installation directory is read-only (Program Files)
+    if path_mod._writable(path_mod.ROOT):
+        return path_mod.ROOT / "config.yaml"
+    return path_mod.user_root() / "config.yaml"
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:

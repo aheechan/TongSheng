@@ -5,15 +5,15 @@
 ;   python tools\build_package.py --stage
 ;   "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\TongSheng.iss
 ;
-; Output: dist\installer\TongSheng-1.1.2-Setup.exe  +  -1.bin, -2.bin ...
+; Output: dist\installer\TongSheng-1.1.3-Setup.exe  +  -1.bin, -2.bin ...
 ; Each slice stays below 1.9 GB so GitHub Releases accepts it (< 2 GB/file).
 
 #define MyAppName "TongSheng"
-#define MyAppVersion "1.1.2"
+#define MyAppVersion "1.1.3"
 #define MyAppPublisher "TongSheng"
 #define MyAppURL "https://github.com/"
 #define MyAppExeName "run.bat"
-#define SourceDir "..\dist\TongSheng-1.1.2"
+#define SourceDir "..\dist\TongSheng-1.1.3"
 #define AssetsDir "..\dist\installer_assets"
 
 [Setup]
@@ -47,11 +47,11 @@ MinVersion=10.0
 PrivilegesRequired=admin
 CloseApplications=yes
 RestartApplications=no
-VersionInfoVersion=1.1.2.0
+VersionInfoVersion=1.1.3.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription=TongSheng - local voice translation with your own cloned voice
 VersionInfoProductName={#MyAppName}
-VersionInfoProductVersion=1.1.2
+VersionInfoProductVersion=1.1.3
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -70,11 +70,13 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\runtime\pythonw.exe"; Parameters: """{app}\tools\dev_run.py"""; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"; Comment: "TongSheng - local voice translation"
+Name: "{group}\Self-test"; Filename: "{app}\runtime\python.exe"; Parameters: """{app}\tools\selftest.py"""; WorkingDir: "{app}"; Comment: "Check models, GPU, audio and voice synthesis"
 Name: "{group}\Documentation"; Filename: "{app}\README.md"; WorkingDir: "{app}"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\runtime\pythonw.exe"; Parameters: """{app}\tools\dev_run.py"""; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"; Comment: "TongSheng - local voice translation"; Tasks: desktopicon
 
 [Run]
+Filename: "{app}\runtime\python.exe"; Parameters: """{app}\tools\selftest.py"""; WorkingDir: "{app}"; Description: "Run the self-test now (models, GPU, audio, ~1 min)"; Flags: postinstall nowait skipifsilent
 Filename: "{app}\runtime\pythonw.exe"; Parameters: """{app}\tools\dev_run.py"""; WorkingDir: "{app}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]

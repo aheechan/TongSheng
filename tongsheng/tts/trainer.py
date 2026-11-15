@@ -82,9 +82,12 @@ class CloneTrainer:
 
         cfg = Config.load()
         cfg.set("paths.gpt_sovits", str(self.models.gpt_sovits))
-        cfg.set("paths.characters", str(root / "characters"))
-        cfg.set("paths.datasets", str(root / "datasets"))
-        cfg.set("paths.logs", str(root / "logs"))
+        from ..paths import user_root
+
+        data = user_root()
+        cfg.set("paths.characters", str(self.models.characters))
+        cfg.set("paths.datasets", str(data / "training" / "datasets"))
+        cfg.set("paths.logs", str(self.models.logs))
         cfg.set("training.s2_version", "v4")
         store = CharacterStore(cfg.path_of("characters"))
 

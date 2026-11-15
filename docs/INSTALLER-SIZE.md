@@ -1,4 +1,4 @@
-# 安装包体积（TongSheng 1.1.2，仅 Default_Voice）
+# 安装包体积（TongSheng 1.1.3，仅 Default_Voice）
 
 由 `tools/build_package.py --stage` 实测（磁盘占用，未压缩）。
 

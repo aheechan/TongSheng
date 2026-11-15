@@ -32,8 +32,10 @@ class FunASREngine(ASREngine):
     def _prepare_env(self) -> None:
         if self.model_cache:
             base = Path(self.model_cache)
-            # funasr uses modelscope's cache: <cache>/models/iic--...
-            os.environ.setdefault("MODELSCOPE_CACHE", str(base.parent if base.name == "modelscope" else base))
+            # ModelScope expects MODELSCOPE_CACHE/models/<org>--<name>; our cache
+            # root is .../models/asr/modelscope, so hand it over unchanged -
+            # pointing at the parent made ModelScope copy the 950 MB model again
+            os.environ.setdefault("MODELSCOPE_CACHE", str(base))
         os.environ.setdefault("FUNASR_DISABLE_UPDATE", "1")
 
     def load(self) -> None:
@@ -66,6 +68,7 @@ class FunASREngine(ASREngine):
         except Exception as exc:  # noqa: BLE001
             if device != "cpu":
                 log.warning("FunASR failed on %s (%s); retrying on CPU", device, exc)
+                log.debug("FunASR CUDA failure detail", exc_info=True)
                 kwargs["device"] = "cpu"
                 self._model = AutoModel(**kwargs)
             else:

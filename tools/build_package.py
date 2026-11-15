@@ -44,6 +44,7 @@ class Group:
     dirs: list[tuple[Path, str]] = field(default_factory=list)
     skip: tuple[str, ...] = ()
     bytes: int = 0
+    copy: bool = False          # copy instead of hardlink (nltk refuses links)
 
 
 def _walk_files(root: Path, skip: tuple[str, ...]) -> list[Path]:
@@ -143,9 +144,19 @@ def build_groups() -> list[Group]:
         llama.dirs.append((source, "llama"))
     groups.append(llama)
 
+    # 6a. project A's training backend (dataset prep + LoRA + self-test)
+    a_app = PRIVATE_VOICE / "app"
+    if a_app.is_dir():
+        vendor = Group("项目 A 训练模块", "", copy=True)
+        vendor.dirs.append((a_app, "app"))
+        prompts = PRIVATE_VOICE / "assets" / "prompts"
+        if prompts.is_dir():
+            vendor.dirs.append((prompts, "assets/prompts"))
+        groups.append(vendor)
+
     # 6b. NLTK data required by the English front-end (g2p_en)
     nltk_src = Path(os.environ.get("APPDATA", "")) / "nltk_data"
-    nltk = Group("NLTK 数据（英文音素）", "")
+    nltk = Group("NLTK 数据（英文音素）", "", copy=True)
     if nltk_src.is_dir():
         nltk.dirs.append((nltk_src, "nltk_data"))
     groups.append(nltk)
@@ -192,26 +203,29 @@ def stage(groups: list[Group], dest: Path) -> None:
 
     linked = copied = 0
 
-    def link(src: Path, target: Path) -> None:
+    def link(src: Path, target: Path, force_copy: bool = False) -> None:
         nonlocal linked, copied
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
             return
-        try:
-            os.link(src, target)
-            linked += 1
-        except OSError:
-            shutil.copy2(src, target)
-            copied += 1
+        if not force_copy:
+            try:
+                os.link(src, target)
+                linked += 1
+                return
+            except OSError:
+                pass
+        shutil.copy2(src, target)
+        copied += 1
 
     for group in groups:
         base = dest / group.dest if group.dest else dest
         for src, rel in group.files:
-            link(src, base / rel if rel else base / src.name)
+            link(src, base / rel if rel else base / src.name, group.copy)
         for root, rel in group.dirs:
             for path in _walk_files(root, group.skip):
                 # rel already carries the in-package prefix for this group
-                link(path, base / rel / path.relative_to(root))
+                link(path, base / rel / path.relative_to(root), group.copy)
     print(f"staged: {linked} hardlinked, {copied} copied -> {dest}")
 
 

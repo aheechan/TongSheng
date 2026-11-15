@@ -14,8 +14,8 @@
 **中文** | [English](README.en.md)
 
 > 作者：**Ahee52**
-> 状态：**1.1.2**
-> 打包构建：**TongSheng-1.1.2-Setup** — 安装后约 **14.1 GB**，安装包 **10.67 GB**（1 个 exe + 7 个 bin）
+> 状态：**1.1.3**
+> 打包构建：**TongSheng-1.1.3-Setup** — 安装后约 **14.1 GB**，安装包 **10.67 GB**（1 个 exe + 7 个 bin）
 > 安装目录：`%ProgramFiles%\TongSheng`
 > 配置 / 日志：`<安装目录>\config.yaml`、`<安装目录>\logs\app.log`
 > 模型：`<安装目录>\GPT-SoVITS\GPT_SoVITS\pretrained_models`、`<安装目录>\models`
@@ -319,10 +319,10 @@ python tools\make_installer_assets.py
 产物在 `dist\installer\`（实测 10.67 GB，LZMA2 压缩率约 0.74）：
 
 ```
-TongSheng-1.1.2-Setup.exe      6.1 MB     引导程序（含图标与英文向导）
-TongSheng-1.1.2-Setup-1.bin    1.77 GB    数据分卷 1
-TongSheng-1.1.2-Setup-2…6.bin  1.77 GB    数据分卷 2–6
-TongSheng-1.1.2-Setup-7.bin    28 MB      数据分卷 7
+TongSheng-1.1.3-Setup.exe      6.1 MB     引导程序（含图标与英文向导）
+TongSheng-1.1.3-Setup-1.bin    1.77 GB    数据分卷 1
+TongSheng-1.1.3-Setup-2…6.bin  1.77 GB    数据分卷 2–6
+TongSheng-1.1.3-Setup-7.bin    28 MB      数据分卷 7
 SHA256SUMS.txt                            校验和
 ```
 
@@ -365,6 +365,10 @@ SHA256SUMS.txt                            校验和
 
 **停止键 / ESC 没反应？**
 1.0.2 起已修：处理中按快捷键或 ESC 会取消当前这段并强制回到待机；上一段卡住的线程会被放弃，不会阻塞下一句。
+
+**装完怎么确认能用？**
+开始菜单 → **Self-test**（或 `runtime\python.exe tools\selftest.py`），逐项检查
+GPU / 模型 / 音频 / 英文音素 / ASR / 合成 / 训练，报告在 `logs\selftest.txt`。
 
 **录音文件在哪？**
 开关打开时在 `results/rec/`；关闭时只保留约 3 分钟。
@@ -414,6 +418,7 @@ CTranslate2（MIT）、llama.cpp（MIT）、PySide6（LGPLv3，动态链接）�
 
 | 版本 | 主要内容 |
 |---|---|
+| 1.1.3 | 修复英文合成（NLTK 硬链接）与训练（缺 app 后端）；可写数据目录；安装后自检 |
 | 1.1.2 | 修复安装版无法启动：打包版路径发现、内置 llama-server、FunASR 缓存布局、启动失败弹窗 |
 | 1.1.1 | 转录不再重复显示同一句；按识别到的真实语种标注 |
 | 1.1.0 | 取消双档，统一录音参数；「输出品质」改为录音开关；关闭时 3 分钟清理缓存 |
