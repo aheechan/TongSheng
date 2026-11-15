@@ -1,5 +1,21 @@
 ﻿# Changelog
 
+## 升级方式变更：覆盖式更新（2026-11-15）
+
+从 1.1.6 起不再使用“升级安装包”，改为**目录覆盖**：
+
+```
+TongSheng-1.1.6-update.zip
+ └─ 解压到 <安装目录>\TongSheng-1.1.6-update\  → 运行 apply_update.bat
+```
+
+- 只包含代码、工具、文档，以及缺失时补回的 `Default_Voice`
+- `apply_update.bat` 用 robocopy 覆盖**已改动的文件**，跳过 `voice-repository`、
+  `logs`、`results`、`config.yaml`，不会删除任何东西
+- 全部完成后打印实际版本号；`Default_Voice` 只在缺失时补
+- 若不想用脚本，直接把解压出来的内容拖进安装目录也可以（`voice-repository`
+  建议手动判断是否覆盖）
+
 ## 1.1.6 - 2026-11-15 (训练打标改用 whisper，逐片段超时与日志)
 
 1.1.5 已修复 50 系显卡上 FunASR 启动失败（日志确认 `using bundled FunASR model at …`

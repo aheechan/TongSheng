@@ -73,6 +73,11 @@ def main() -> int:
             shutil.copy2(path, dest)
             total += dest.stat().st_size
 
+    helper = ROOT / "installer" / "apply_update.bat"
+    if helper.is_file():
+        shutil.copy2(helper, target / "apply_update.bat")
+        total += (target / "apply_update.bat").stat().st_size
+
     for rel in INCLUDE_FILES:
         src = ROOT / rel
         if src.is_file():
