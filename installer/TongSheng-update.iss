@@ -1,4 +1,4 @@
-; TongSheng update package (1.1.4 -> 1.1.5)
+; TongSheng update package (1.1.4 -> 1.1.6)
 ; Finds the previous install directory from the uninstall registry key, so a
 ; copy installed to D:\TongSheng is updated in place instead of landing in
 ; Program Files.
@@ -6,8 +6,8 @@
 ; Build:  python tools\build_update_package.py  &&  ISCC.exe installer\TongSheng-update.iss
 
 #define MyAppName "TongSheng"
-#define MyAppVersion "1.1.5"
-#define SourceDir "..\dist\TongSheng-1.1.5-update"
+#define MyAppVersion "1.1.6"
+#define SourceDir "..\dist\TongSheng-1.1.6-update"
 #define AssetsDir "..\dist\installer_assets"
 
 [Setup]
@@ -34,11 +34,11 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 Uninstallable=no
-VersionInfoVersion=1.1.5.0
+VersionInfoVersion=1.1.6.0
 VersionInfoCompany=TongSheng
-VersionInfoDescription=TongSheng 1.1.5 update (code, tools, docs, default voice)
+VersionInfoDescription=TongSheng 1.1.6 update (code, tools, docs, default voice)
 VersionInfoProductName={#MyAppName}
-VersionInfoProductVersion=1.1.5
+VersionInfoProductVersion=1.1.6
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

@@ -149,6 +149,17 @@ def main() -> int:
             raise RuntimeError(f"output too small ({size:.0f} KB)")
         return f"{path.name}, {size:.0f} KB"
 
+    def voices() -> str:
+        from tongsheng.tts.voices import VoiceStore
+
+        store = VoiceStore(models.characters)
+        found = store.list()
+        if not found:
+            raise RuntimeError("no voices installed - reinstall or import one")
+        names = ", ".join(v.name for v in found[:6])
+        has_default = any(v.id.lower().startswith("default") for v in found)
+        return f"{len(found)} voice(s): {names}" + ("" if has_default else " (Default_Voice missing)")
+
     def training() -> str:
         from tongsheng.tts.trainer import CloneTrainer
 
@@ -167,6 +178,7 @@ def main() -> int:
     ok &= check("English front-end (NLTK)", english_frontend)
     ok &= check("ASR engine loads", asr)
     ok &= check("Voice synthesis", synthesis)
+    ok &= check("Voice library", voices)
     ok &= check("Voice training backend", training)
 
     report = [f"TongSheng {__version__} self test",

@@ -46,7 +46,7 @@ class TrainWorker(QThread):
             service.pause_models()
             trainer = CloneTrainer(
                 service.config, service.models,
-                asr_factory=lambda: service.asr_engine("zh"),
+                asr_factory=lambda: service.labeling_asr(),
                 on_event=lambda event: self.progress.emit(
                     event.stage, event.message, event.epoch, event.total_epochs),
             )

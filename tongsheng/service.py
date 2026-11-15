@@ -253,6 +253,22 @@ class TongShengService:
             self._servers.stop_all()
 
     # -- models ---------------------------------------------------------
+    def labeling_asr(self) -> ASREngine:
+        """ASR used to label training clips.
+
+        Dataset preparation runs dozens of short clips back to back; whisper
+        (already bundled for English) is far more predictable there than
+        Paraformer, and it leaves the live ASR untouched.
+        """
+        try:
+            engine = create_engine("whisper", self.config, "zh", self.models)
+            engine.load()
+            log.info("labelling engine: whisper on %s", getattr(engine, "device", "?"))
+            return engine
+        except Exception as exc:  # noqa: BLE001
+            log.warning("whisper labelling unavailable (%s); using the live ASR", exc)
+            return self.asr_engine("zh")
+
     def asr_engine(self, language: str | None = None) -> ASREngine:
         lang = normalize_language(language or self.config.language)
         kind = engine_kind_for_language(self.config, lang)

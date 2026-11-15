@@ -11,6 +11,8 @@ Output layout (compatible with project A):
 from __future__ import annotations
 
 import json
+import queue
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -23,6 +25,31 @@ from ..logs import get_logger
 log = get_logger("tts.dataset")
 
 LANG_TAG = {"zh": "ZH", "en": "EN"}
+
+
+def _transcribe(engine: object, audio: np.ndarray, sr: int,
+                timeout: float = 45.0) -> str:
+    """Transcribe with a hard timeout: a stuck GPU call must not freeze training."""
+    box: queue.Queue = queue.Queue(maxsize=1)
+
+    def run() -> None:
+        try:
+            result = engine.transcribe(audio, 16000)  # type: ignore[attr-defined]
+            box.put((getattr(result, "text", "") or "").strip())
+        except Exception as exc:  # noqa: BLE001
+            box.put(exc)
+
+    worker = threading.Thread(target=run, name="ts-label", daemon=True)
+    worker.start()
+    try:
+        value = box.get(timeout=timeout)
+    except queue.Empty:
+        log.warning("ASR timed out after %.0fs; skipping this clip", timeout)
+        return ""
+    if isinstance(value, Exception):
+        log.warning("ASR failed (%s); skipping this clip", value)
+        return ""
+    return str(value)
 
 
 @dataclass
@@ -151,11 +178,10 @@ def build_dataset(source: str | Path, out_dir: str | Path,
         wavmod.write_wav(target, piece, sr, subtype="PCM_16")
         text = ""
         if engine is not None:
-            try:
-                result = engine.transcribe(wavmod.resample(piece, sr, 16000), 16000)
-                text = (getattr(result, "text", "") or "").strip()
-            except Exception as exc:  # noqa: BLE001
-                log.warning("labeling clip %s failed: %s", name, exc)
+            log.info("labelling clip %s (%.1fs audio) with %s",
+                     name, piece.size / float(sr or 1), getattr(engine, "name", "asr"))
+            text = _transcribe(engine, wavmod.resample(piece, sr, 16000), 16000)
+            log.info("labelled clip %s -> %d chars", name, len(text))
         if not text:
             target.unlink(missing_ok=True)
             continue

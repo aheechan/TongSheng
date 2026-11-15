@@ -1,6 +1,6 @@
 """TongSheng (同声) — real-time voice translation in your own voice."""
 
-__version__ = "1.1.5"
+__version__ = "1.1.6"
 APP_NAME = "TongSheng"
 APP_NAME_ZH = "同声"
 APP_ID = "TongSheng.Tray.App"

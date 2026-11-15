@@ -1,5 +1,20 @@
 ﻿# Changelog
 
+## 1.1.6 - 2026-11-15 (训练打标改用 whisper，逐片段超时与日志)
+
+1.1.5 已修复 50 系显卡上 FunASR 启动失败（日志确认 `using bundled FunASR model at …`
+→ `FunASR ready on cuda`），但训练在“分段/打标”阶段仍可能长时间无输出。
+
+### Changed
+- **训练打标不再用实时 ASR**：几十个短片段连打标是一个批量任务，改用随包的
+  faster-whisper（同一块 GPU）。它不参与 FunASR 的模型解析，失败面更小；实时识别仍用
+  Paraformer，两者互不影响。
+- **逐片段超时 45 秒**：某一段卡住就跳过并记日志，不会让整次训练无限等待
+- **每个片段都有日志**：`labelling clip 0003 (4.2s audio) with faster-whisper`，
+  卡在哪一片一眼可见
+- 自检新增 **Voice library** 一项：列出已安装音色，并提示 `Default_Voice` 是否缺失
+- 升级包继续携带 `Default_Voice`（`onlyifdoesntexist`，不会覆盖自训音色）
+
 ## 1.1.5 - 2026-11-15 (FunASR 真正修复：按目录加载；升级包定位原安装目录)
 
 ### Fixed
