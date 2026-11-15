@@ -27,62 +27,6 @@ _ALIASES = {
 }
 
 
-class FallbackEngine(ASREngine):
-    """Try the preferred engine, then a GPU alternative - never silently CPU.
-
-    Blackwell cards sometimes reject FunASR's CUDA build. Instead of dropping to
-    CPU (slow and against the product promise) we switch to faster-whisper on
-    the same GPU, which is already shipped for English.
-    """
-
-    def __init__(self, primary: ASREngine, secondary: ASREngine) -> None:
-        self.primary = primary
-        self.secondary = secondary
-        self.active: ASREngine | None = None
-        self.language = primary.language
-        self.name = primary.name
-
-    def load(self) -> None:
-        if self.active is not None:
-            return
-        try:
-            self.primary.load()
-            self.active = self.primary
-            self.name = self.primary.name
-            log.info("ASR engine ready: %s", self.primary.name)
-            return
-        except Exception as exc:  # noqa: BLE001
-            log.error("ASR %s unavailable on GPU: %s", self.primary.name, exc)
-            log.debug("ASR primary failure", exc_info=True)
-        self.secondary.load()
-        self.active = self.secondary
-        self.name = self.secondary.name
-        log.warning("ASR switched to %s (GPU fallback)", self.secondary.name)
-
-    @property
-    def device(self) -> str:
-        for engine in (self.active, self.primary):
-            value = getattr(engine, "device", None)
-            if value:
-                return str(value)
-        return "?"
-
-    def transcribe(self, samples: np.ndarray, sample_rate: int = 16000) -> ASRResult:
-        self.load()
-        assert self.active is not None
-        result = self.active.transcribe(samples, sample_rate)
-        result.engine = self.active.name
-        return result
-
-    def close(self) -> None:
-        for engine in (self.primary, self.secondary):
-            try:
-                engine.close()  # type: ignore[attr-defined]
-            except Exception:  # noqa: BLE001
-                pass
-        self.active = None
-
-
 class FakeASR(ASREngine):
     """Deterministic engine for tests: returns a canned sentence."""
 
@@ -118,14 +62,6 @@ def create_engine(kind: str, config: AppConfig, language: str,
             model_cache=(models.funasr_dir if models is not None else None),
             allow_cpu_fallback=bool(getattr(config.asr, "allow_cpu_fallback", False)),
         )
-        if getattr(config.asr, "gpu_fallback", "whisper") == "whisper":
-            secondary = WhisperEngine(
-                size=config.asr.whisper_size,
-                device=config.asr.device,
-                model_dir=(models.whisper_dir if models is not None else None),
-                language=language,
-            )
-            return FallbackEngine(primary, secondary)
         return primary
     if key == "whisper":
         return WhisperEngine(
@@ -151,6 +87,6 @@ def available_engines() -> dict[str, bool]:
     }
 
 
-__all__ = ["ASREngine", "ASRResult", "EngineUnavailable", "FakeASR", "FallbackEngine",
+__all__ = ["ASREngine", "ASRResult", "EngineUnavailable", "FakeASR",
            "FunASREngine", "WhisperEngine", "create_engine",
            "engine_kind_for_language", "available_engines"]

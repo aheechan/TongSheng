@@ -246,12 +246,6 @@ class TongShengTray(QObject):
         self._cache_timer.setInterval(60_000)
         self._cache_timer.timeout.connect(lambda: self.service.cleanup_recordings())
         self._cache_timer.start()
-        # 8 GB profile: drop the LLM servers after a quiet minute
-        self._idle_timer = QTimer(self)
-        self._idle_timer.setInterval(60_000)
-        self._idle_timer.timeout.connect(
-            lambda: self.service.release_servers_if_idle(90))
-        self._idle_timer.start()
         self.service.cleanup_recordings()
         self.tray.show()
 

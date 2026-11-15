@@ -64,11 +64,13 @@ def _copy_file(src: Path, dst: Path, attempts: int = 8) -> bool:
 class CloneTrainer:
     def __init__(self, config: AppConfig, models: ModelPaths,
                  asr_factory: Callable[[], Any] | None = None,
-                 on_event: Callable[[TrainProgress], None] | None = None) -> None:
+                 on_event: Callable[[TrainProgress], None] | None = None,
+                 release_asr: Callable[[], None] | None = None) -> None:
         self.config = config
         self.models = models
         self.asr_factory = asr_factory
         self.on_event = on_event or (lambda _p: None)
+        self.release_asr = release_asr
         self._runner: Any = None
 
     # -- availability ---------------------------------------------------
@@ -130,6 +132,11 @@ class CloneTrainer:
             source_path, dataset_dir,
             asr_factory=self.asr_factory, language=language,
             on_event=lambda msg: self.on_event(TrainProgress("dataset", msg)))
+        if self.release_asr is not None:
+            try:
+                self.release_asr()
+            except Exception as exc:  # noqa: BLE001
+                log.debug("releasing labelling engine failed: %s", exc)
         log.info("dataset: %s", stats)
         self.on_event(TrainProgress(
             "dataset", f"{stats['clips']} 个片段 / {stats['seconds']:.1f}s 语音"))

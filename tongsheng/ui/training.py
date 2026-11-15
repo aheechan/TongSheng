@@ -43,17 +43,11 @@ class TrainWorker(QThread):
     def run(self) -> None:  # noqa: D102
         service = self.service
         try:
-            budget = getattr(service, "budget", None)
-            if budget is not None and not budget.training_allowed:
-                self.failed.emit(
-                    "本机显存不足（%.0f GB）：音色训练需要 12 GB 以上。\n"
-                    "可在 12 GB+ 的机器上训练，然后把 voice-repository/<音色> 整个目录"
-                    "拷到本机即可使用。" % budget.total_gb)
-                return
             service.pause_models()
             trainer = CloneTrainer(
                 service.config, service.models,
                 asr_factory=lambda: service.labeling_asr(),
+                release_asr=getattr(service, "release_labelling_engine", None),
                 on_event=lambda event: self.progress.emit(
                     event.stage, event.message, event.epoch, event.total_epochs),
             )
@@ -65,7 +59,7 @@ class TrainWorker(QThread):
             self.failed.emit(f"{type(exc).__name__}: {exc}")
         finally:
             try:
-                service.resume_models()
+                service.ensure_resumed()
             except Exception:
                 pass
 
@@ -360,6 +354,10 @@ class NewVoiceTab(QWidget):
             worker.wait(timeout_ms)
 
     def _on_thread_finished(self) -> None:
+        try:
+            self.service.ensure_resumed()
+        except Exception:  # noqa: BLE001
+            pass
         worker = self._worker
         if worker is not None:
             worker.deleteLater()

@@ -82,12 +82,38 @@ def show_error(title: str, message: str) -> None:
         pass
 
 
+def _install_qt_logger(models: ModelPaths | None) -> None:
+    """qFatal() bypasses Python; log Qt messages so a hard abort leaves a trace."""
+    try:
+        from PySide6.QtCore import QtMsgType, qInstallMessageHandler
+
+        base = Path(models.logs) if models is not None and models.logs else Path("logs")
+        base.mkdir(parents=True, exist_ok=True)
+        handle = (base / "qt.log").open("a", encoding="utf-8", buffering=1)
+        names = {QtMsgType.QtDebugMsg: "debug", QtMsgType.QtInfoMsg: "info",
+                 QtMsgType.QtWarningMsg: "warning", QtMsgType.QtCriticalMsg: "critical",
+                 QtMsgType.QtFatalMsg: "FATAL"}
+
+        def handler(mode, _context, message):  # noqa: ANN001
+            try:
+                handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} "
+                             f"[{names.get(mode, mode)}] {message}\n")
+            except Exception:  # noqa: BLE001
+                pass
+
+        qInstallMessageHandler(handler)
+        globals()["_QT_LOG_HANDLE"] = handle
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def run() -> int:
     _set_app_user_model_id()
     config = load_config()
     models = config.resolve_models()
     setup_logging(models.logs)
     _install_crash_handler(models)
+    _install_qt_logger(models)
 
     missing = models.missing_core()
     if missing:

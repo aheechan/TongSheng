@@ -1,5 +1,33 @@
 ﻿# Changelog
 
+## 1.1.10 - 2026-11-15 (崩溃根除 + 训练可观测；不做显存限制)
+
+### 策略
+
+不做任何“按空闲显存限流/降级/拒绝”的保护。8 GB 到 24 GB 一视同仁，
+显存不够就让驱动报错或花屏，由用户自行判断。`tongsheng/vram.py` 只用于日志与自检展示。
+
+### Fixed（Qt6Core 0xc0000409）
+
+- `TrainWorker` 不再在 `_reset()` 里被置空：`finished → deleteLater()`，保留引用
+- 取消 / 关闭训练窗口：`cancel()` + `wait(5000)`；`TrainingDialog.closeEvent` 也会等待
+- `ensure_resumed()`（幂等）在 worker `finally` 与 `_on_thread_finished()` 各调一次，
+  正常结束、取消、异常、关窗四条路径都能恢复 ASR/TTS
+- 训练期间 `_prepare`/`warmup` 直接 no-op（独占标志），排除并发加载模型
+- 训练开始 `pause_models()` 会停掉 llama-server，结束后重建
+
+### Added
+
+- `logs/qt.log`：`qInstallMessageHandler` 把 Qt 自己的 `qFatal` 文本（例如
+  `QThread: Destroyed while thread is still running`）落盘——这是 `faulthandler`
+  抓不到的，崩溃前能看到最后一句
+- 标注逐片段计时：`clip 0001.wav (2.3s audio) -> 15 chars in 0.8s`
+- 标注结束立刻 `release_labelling_engine()`，释放约 1 GB
+
+### Removed
+
+- `FallbackEngine` 与 `asr.gpu_fallback`（死代码，且在 50 系上 whisper 会卡）
+
 ## 1.1.9 - 2026-11-15 (8 GB 显存目标 + 崩溃根除)
 
 ### 目标改为 8 GB 显卡可用

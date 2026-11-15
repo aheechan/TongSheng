@@ -70,7 +70,7 @@ centred("Your voice,", 196, caption, (150, 172, 193, 255))
 centred("any language.", 208, caption, (150, 172, 193, 255))
 
 centred("local  ·  offline  ·  GPT-SoVITS v4", 258, caption, (104, 124, 143, 255))
-centred("v1.1.9", 276, caption, (104, 124, 143, 255))
+centred("v1.1.10", 276, caption, (104, 124, 143, 255))
 
 panel.convert("RGB").save(OUT / "wizard_image.bmp", format="BMP")
 

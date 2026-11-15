@@ -11,6 +11,7 @@ Output layout (compatible with project A):
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -153,11 +154,16 @@ def build_dataset(source: str | Path, out_dir: str | Path,
         if engine is not None:
             log.info("labelling clip %s (%.1fs audio) with %s",
                      name, piece.size / float(sr or 1), getattr(engine, "name", "asr"))
+            started = time.perf_counter()
             try:
                 result = engine.transcribe(wavmod.resample(piece, sr, 16000), 16000)
                 text = (getattr(result, "text", "") or "").strip()
+                log.info("clip %s: %.1fs audio -> %d chars in %.1fs",
+                         name, piece.size / float(sr or 1), len(text),
+                         time.perf_counter() - started)
             except Exception as exc:  # noqa: BLE001
-                log.warning("labeling clip %s failed: %s", name, exc)
+                log.warning("labeling clip %s failed after %.1fs: %s", name,
+                            time.perf_counter() - started, exc)
             log.info("labelled clip %s -> %d chars", name, len(text))
         if not text:
             target.unlink(missing_ok=True)
