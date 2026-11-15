@@ -30,7 +30,10 @@ Put every file in one folder and run the `.exe`. A missing slice aborts the inst
   The setup offers "Run the self-test now" on the final page.
 - **No 950 MB duplicate**: `MODELSCOPE_CACHE` now points at `models\asr\modelscope`, so
   ModelScope reuses the bundled paraformer instead of copying it on first load
-- FunASR keeps the full CUDA failure traceback for diagnosis on RTX 50 series
+- **No silent CPU fallback**: FunASR retries on `cuda` -> `cuda:0` -> `cuda` with lazy CUDA
+  module loading (project A's loader plus a small compatibility ladder), then reports the real
+  error. CPU is only used when `asr.allow_cpu_fallback: true`; the self-test fails if Chinese
+  ASR is not running on the GPU.
 
 ## Requirements
 

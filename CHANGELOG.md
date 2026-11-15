@@ -13,6 +13,10 @@
   否则自动落到 `%LOCALAPPDATA%\TongSheng`（配置、日志、录音、自训音色都在那里）。
 - **多占 950 MB**：`MODELSCOPE_CACHE` 被设成了 `models\asr`（父目录），ModelScope 找不到
   模型就复制了一份 paraformer。现在指向 `models\asr\modelscope`，不再重复占盘。
+- **不再静默退回 CPU**：FunASR 在 CUDA 上失败时会按 `cuda` → `cuda:0` → `cuda`(LAZY 模块加载)
+  依次重试（参照项目 A 的加载方式，只增加新卡兼容层）；全部失败才报错，并给出驱动/换引擎
+  的明确指引。要允许 CPU 兜底需显式打开 `asr.allow_cpu_fallback: true`。
+  自检里 ASR 项现在要求真的跑在 GPU 上。
 - FunASR 在 CUDA 上失败时保留完整堆栈（`--verbose` / 日志 debug），便于定位
   50 系显卡上的 `'NoneType' object is not callable`。
 

@@ -21,11 +21,13 @@ class FunASREngine(ASREngine):
 
     def __init__(self, model: str = "paraformer-zh", device: str = "cuda",
                  model_cache: str | Path | None = None,
-                 punc_model: str | None = None) -> None:
+                 punc_model: str | None = None,
+                 allow_cpu_fallback: bool = False) -> None:
         self.model_id = model or "paraformer-zh"
         self.device = device or "cuda"
         self.model_cache = str(model_cache) if model_cache else ""
         self.punc_model = punc_model
+        self.allow_cpu_fallback = allow_cpu_fallback
         self._model = None
         self._lock = threading.Lock()
 
@@ -47,33 +49,75 @@ class FunASREngine(ASREngine):
         except ImportError as exc:
             raise EngineUnavailable(
                 "FunASR is not installed (`pip install funasr`).") from exc
-        device = self.device
-        try:
-            import torch
 
-            if str(device).startswith("cuda") and not torch.cuda.is_available():
-                device = "cpu"
-        except Exception:
-            pass
-        kwargs: dict[str, object] = {
+        allow_cpu = bool(getattr(self, "allow_cpu_fallback", False))
+        wants_cuda = str(self.device).startswith("cuda")
+        if wants_cuda:
+            try:
+                import torch
+
+                if not torch.cuda.is_available():
+                    if not allow_cpu:
+                        raise EngineUnavailable(
+                            "CUDA is not available to torch; FunASR needs a working "
+                            "NVIDIA driver (asr.allow_cpu_fallback=true to use CPU)")
+                    wants_cuda = False
+            except EngineUnavailable:
+                raise
+            except Exception:  # noqa: BLE001
+                if not allow_cpu:
+                    raise
+                wants_cuda = False
+
+        base_kwargs: dict[str, object] = {
             "model": self.model_id,
-            "device": device,
             "disable_update": True,
         }
         if self.punc_model:
-            kwargs["punc_model"] = self.punc_model
-        log.info("loading FunASR model %s on %s", self.model_id, device)
-        try:
-            self._model = AutoModel(**kwargs)
-        except Exception as exc:  # noqa: BLE001
-            if device != "cpu":
-                log.warning("FunASR failed on %s (%s); retrying on CPU", device, exc)
-                log.debug("FunASR CUDA failure detail", exc_info=True)
-                kwargs["device"] = "cpu"
+            base_kwargs["punc_model"] = self.punc_model
+
+        # Same code path as project A (AutoModel(device=...)) plus a small
+        # compatibility ladder for newer cards: an explicit device index and a
+        # lazily loaded CUDA module table usually clear startup failures on
+        # sm_120 / Blackwell without touching the packaged runtime.
+        attempts: list[tuple[str, dict[str, object]]] = []
+        if wants_cuda:
+            attempts.append(("cuda", {"device": "cuda"}))
+            attempts.append(("cuda:0", {"device": "cuda:0"}))
+            attempts.append(("cuda (lazy)", {"device": "cuda", "_lazy": True}))
+        if allow_cpu or not wants_cuda:
+            attempts.append(("cpu", {"device": "cpu"}))
+
+        last: Exception | None = None
+        for label, extra in attempts:
+            lazy = bool(extra.pop("_lazy", False))
+            if lazy:
+                os.environ["CUDA_MODULE_LOADING"] = "LAZY"
+                try:
+                    import torch
+
+                    torch.cuda.init()
+                    torch.cuda.set_device(0)
+                except Exception:  # noqa: BLE001
+                    pass
+            kwargs = dict(base_kwargs)
+            kwargs.update(extra)
+            log.info("loading FunASR model %s on %s", self.model_id, label)
+            try:
                 self._model = AutoModel(**kwargs)
-            else:
-                raise EngineUnavailable(f"cannot load FunASR model: {exc}") from exc
-        self.device = str(device)
+                self.device = str(kwargs["device"])
+                log.info("FunASR ready on %s", self.device)
+                return
+            except Exception as exc:  # noqa: BLE001
+                last = exc
+                log.warning("FunASR load failed on %s: %s", label, exc)
+                log.debug("FunASR %s failure detail", label, exc_info=True)
+
+        detail = f"{type(last).__name__}: {last}" if last else "no device available"
+        raise EngineUnavailable(
+            "FunASR could not start on GPU: " + detail +
+            "\nCheck the NVIDIA driver (CUDA 12.8 / 570.x or newer) for this card, "
+            "or set asr.en_engine=whisper, or allow CPU with asr.allow_cpu_fallback=true")
 
     def transcribe(self, samples: np.ndarray, sample_rate: int = 16000) -> ASRResult:
         start = time.perf_counter()

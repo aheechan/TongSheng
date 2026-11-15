@@ -127,7 +127,11 @@ def main() -> int:
         result = engine.transcribe(np.zeros(16000, dtype=np.float32), 16000)
         if result.error:
             raise RuntimeError(result.error)
-        return f"{kind} loaded on {getattr(engine, 'device', '?')}"
+        device = str(getattr(engine, "device", "?"))
+        if kind == "funasr" and not device.startswith("cuda"):
+            raise RuntimeError(
+                f"FunASR fell back to {device}; the GPU path must work (see logs)")
+        return f"{kind} loaded on {device}"
 
     def synthesis() -> str:
         from tongsheng.tts import TTSRuntime

@@ -60,6 +60,7 @@ def create_engine(kind: str, config: AppConfig, language: str,
             model=config.asr.funasr_model if language == "zh" else "paraformer-zh",
             device=config.asr.device,
             model_cache=(models.funasr_dir if models is not None else None),
+            allow_cpu_fallback=bool(getattr(config.asr, "allow_cpu_fallback", False)),
         )
     if key == "whisper":
         return WhisperEngine(

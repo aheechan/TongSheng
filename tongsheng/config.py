@@ -151,6 +151,7 @@ class ASRConfig:
     zh_engine: str = "funasr"       # funasr | fake
     en_engine: str = "whisper"      # whisper | funasr | fake
     device: str = "cuda"
+    allow_cpu_fallback: bool = False   # never silently drop to CPU ASR
     whisper_size: str = "small"
     whisper_dir: str = "auto"
     funasr_model: str = "paraformer-zh"
