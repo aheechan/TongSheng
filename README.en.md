@@ -9,7 +9,7 @@ Audio never leaves the box.
 
 > Author: **Ahee52**
 > Status: **1.1.2**
-> Packaged build: **TongSheng-1.1.2-Setup** — ~14.1 GB installed, 10.6 GB installer (1 exe + 7 bins)
+> Packaged build: **TongSheng-1.1.2-Setup** — ~14.1 GB installed, 10.67 GB installer (1 exe + 7 bins)
 > Install dir: `%ProgramFiles%\TongSheng`
 > Config / logs: `<install>\config.yaml`, `<install>\logs\app.log`
 
@@ -145,7 +145,7 @@ python tools\make_installer_assets.py
 "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\TongSheng.iss
 ```
 
-The result lands in `dist\installer\` (10.64 GB total, LZMA2 ratio ~0.74): one 6 MB
+The result lands in `dist\installer\` (10.67 GB total, LZMA2 ratio ~0.74): one 6 MB
 `TongSheng-1.1.2-Setup.exe`, seven `TongSheng-1.1.2-Setup-N.bin` slices of 1.77 GB (under
 GitHub's 2 GB per-asset limit) and `SHA256SUMS.txt`.
 The wizard is English-only and uses the same dark artwork and microphone icon as the app.

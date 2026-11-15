@@ -11,9 +11,9 @@
 | File | Size |
 |---|---|
 | `TongSheng-1.1.2-Setup.exe` | ~6 MB |
-| `TongSheng-1.1.2-Setup-1.bin` … `-7.bin` | ~1.77 GB each |
+| `TongSheng-1.1.2-Setup-1.bin` … `-7.bin` | 1.77 GB each (last 52 MB) |
 
-Put them in the **same folder**, run the `.exe`, keep every `.bin` next to it.
+All 8 files total **10.67 GB**. Put them in the **same folder**, run the `.exe`, keep every `.bin` next to it.
 A missing slice aborts the install. Verify with `SHA256SUMS.txt`.
 
 ## Requirements

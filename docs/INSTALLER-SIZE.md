@@ -12,14 +12,14 @@
 | GPT-SoVITS 代码 + v4 预训练权重（s1v3 / s2Gv4 / vocoder / roberta / hubert / langdetect / G2PW） | 2527 |
 | Default_Voice 音色（GPT ckpt 148 + LoRA 72 + 参考音频 1） | 221 |
 | llama-server + DLL | 168 |
-| 应用代码与文档 | 6 |
-| **合计** | **14480（约 14.1 GB）** |
+| 应用代码、工具与 NLTK 数据 | 40 |
+| **合计** | **14448（约 14.1 GB）** |
 
 ## 口径
 
 | 方案 | 已安装 | 实测安装包（LZMA2，1.9 GB 分卷） |
 |---|---:|---:|
-| **标准（2B 翻译，当前构建）** | 14.09 GB | **10.64 GB**（1 exe + 7 bin） |
+| **标准（2B 翻译，当前构建）** | 14.14 GB | **10.67 GB**（1 exe + 7 bin） |
 | 标点换 small | 13.3 GB | ≈ 9.9 GB |
 | 翻译换 9B | 18.3 GB | ≈ 13.6 GB |
 
