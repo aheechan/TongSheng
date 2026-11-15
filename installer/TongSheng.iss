@@ -5,15 +5,15 @@
 ;   python tools\build_package.py --stage
 ;   "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\TongSheng.iss
 ;
-; Output: dist\installer\TongSheng-1.1.7-Setup.exe  +  -1.bin, -2.bin ...
+; Output: dist\installer\TongSheng-1.1.8-Setup.exe  +  -1.bin, -2.bin ...
 ; Each slice stays below 1.9 GB so GitHub Releases accepts it (< 2 GB/file).
 
 #define MyAppName "TongSheng"
-#define MyAppVersion "1.1.7"
+#define MyAppVersion "1.1.8"
 #define MyAppPublisher "TongSheng"
 #define MyAppURL "https://github.com/"
 #define MyAppExeName "run.bat"
-#define SourceDir "..\dist\TongSheng-1.1.7"
+#define SourceDir "..\dist\TongSheng-1.1.8"
 #define AssetsDir "..\dist\installer_assets"
 
 [Setup]
@@ -47,11 +47,11 @@ MinVersion=10.0
 PrivilegesRequired=admin
 CloseApplications=yes
 RestartApplications=no
-VersionInfoVersion=1.1.7.0
+VersionInfoVersion=1.1.8.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription=TongSheng - local voice translation with your own cloned voice
 VersionInfoProductName={#MyAppName}
-VersionInfoProductVersion=1.1.7
+VersionInfoProductVersion=1.1.8
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
