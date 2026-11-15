@@ -28,6 +28,10 @@ Put every file in one folder and run the `.exe`. A missing slice aborts the inst
   model folders and v4 weights, llama-server, audio endpoints, English NLTK data, ASR load,
   English synthesis, training backend. Report: `logs\selftest.txt`.
   The setup offers "Run the self-test now" on the final page.
+- **Training finishes cleanly**: the training workspace is now
+  `<data>\training\characters` (it used to collide with `voice-repository`, so installing the
+  voice tried to copy `reference.wav` onto itself and died with `WinError 32`); file copies
+  retry on transient Windows locks
 - **No 950 MB duplicate**: `MODELSCOPE_CACHE` now points at `models\asr\modelscope`, so
   ModelScope reuses the bundled paraformer instead of copying it on first load
 - **No silent CPU fallback**: FunASR retries on `cuda` -> `cuda:0` -> `cuda` with lazy CUDA

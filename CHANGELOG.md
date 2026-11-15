@@ -11,6 +11,11 @@
 - **安装目录不可写**：`%ProgramFiles%\TongSheng` 对普通用户只读，导致日志、
   配置、训练数据集写不进去。新增 `paths.user_root()`：安装目录可写就用它，
   否则自动落到 `%LOCALAPPDATA%\TongSheng`（配置、日志、录音、自训音色都在那里）。
+- **训练最后一步报 PermissionError**：训练完成、音色安装时把 `reference.wav`
+  复制到它自己身上（项目 A 的 character 目录被指到了 `voice-repository`，与安装目标同名），
+  Windows 直接抛 `WinError 32`。现在：
+  - 训练工作区独立到 `<数据目录>\training\characters`，不再污染音色库
+  - 所有权重/参考音频拷贝改走 `_copy_file()`：同路径自动跳过，被占用时重试 8 次
 - **多占 950 MB**：`MODELSCOPE_CACHE` 被设成了 `models\asr`（父目录），ModelScope 找不到
   模型就复制了一份 paraformer。现在指向 `models\asr\modelscope`，不再重复占盘。
 - **不再静默退回 CPU**：FunASR 在 CUDA 上失败时会按 `cuda` → `cuda:0` → `cuda`(LAZY 模块加载)

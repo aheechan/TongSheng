@@ -37,6 +37,30 @@ class TrainError(RuntimeError):
     pass
 
 
+def _copy_file(src: Path, dst: Path, attempts: int = 8) -> bool:
+    """Copy with retries; skips when both paths are the same file.
+
+    Windows raises WinError 32 when a file is briefly held (antivirus, the
+    training subprocess flushing weights, or a self-test player). Copying a
+    file onto itself inside our own repository is likewise a sharing violation.
+    """
+    try:
+        if src.resolve() == dst.resolve():
+            log.info("reference already in place: %s", dst)
+            return False
+    except OSError:
+        pass
+    last: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            shutil.copy2(src, dst)
+            return True
+        except PermissionError as exc:      # WinError 32
+            last = exc
+            time.sleep(0.4 * (attempt + 1))
+    raise TrainError(f"无法写入 {dst}（文件被占用）：{last}")
+
+
 class CloneTrainer:
     def __init__(self, config: AppConfig, models: ModelPaths,
                  asr_factory: Callable[[], Any] | None = None,
@@ -85,7 +109,9 @@ class CloneTrainer:
         from ..paths import user_root
 
         data = user_root()
-        cfg.set("paths.characters", str(self.models.characters))
+        work_characters = data / "training" / "characters"
+        work_characters.mkdir(parents=True, exist_ok=True)
+        cfg.set("paths.characters", str(work_characters))
         cfg.set("paths.datasets", str(data / "training" / "datasets"))
         cfg.set("paths.logs", str(self.models.logs))
         cfg.set("training.s2_version", "v4")
@@ -157,10 +183,10 @@ class CloneTrainer:
         sovits_src = Path(str(result.get("sovits") or ""))
         gpt_rel = sovits_rel = ""
         if gpt_src.exists():
-            shutil.copy2(gpt_src, ckpt_dir / gpt_src.name)
+            _copy_file(gpt_src, ckpt_dir / gpt_src.name)
             gpt_rel = f"checkpoints/{gpt_src.name}"
         if sovits_src.exists():
-            shutil.copy2(sovits_src, ckpt_dir / sovits_src.name)
+            _copy_file(sovits_src, ckpt_dir / sovits_src.name)
             sovits_rel = f"checkpoints/{sovits_src.name}"
 
         ref_src = Path(str(result.get("reference") or ""))
@@ -168,7 +194,7 @@ class CloneTrainer:
             ref_src = dataset_dir / "reference.wav"
         ref_text = ""
         if ref_src.exists():
-            shutil.copy2(ref_src, target / "reference.wav")
+            _copy_file(ref_src, target / "reference.wav")
             text_file = ref_src.with_suffix(".txt")
             if text_file.exists():
                 ref_text = text_file.read_text(encoding="utf-8", errors="replace").strip()
