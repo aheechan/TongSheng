@@ -52,14 +52,48 @@ class WhisperEngine(ASREngine):
                 device = "cpu"
             try:
                 log.info("loading faster-whisper %s on %s/%s", target, device, compute)
-                self._model = WhisperModel(target, device=device, compute_type=compute,
-                                           download_root=self.model_dir or None)
+                model = WhisperModel(target, device=device, compute_type=compute,
+                                     download_root=self.model_dir or None)
+                self._model = model
                 self.device = device
+                self._probe()
                 return
             except Exception as exc:  # noqa: BLE001
                 last = exc
                 self._model = None
         raise EngineUnavailable(f"cannot load faster-whisper: {last}")
+
+    def _probe(self) -> None:
+        """First inference must answer quickly; CTranslate2 blocks on unsupported cards."""
+        import queue
+        import threading
+
+        import numpy as np
+
+        box: queue.Queue = queue.Queue(maxsize=1)
+
+        def run() -> None:
+            try:
+                assert self._model is not None
+                segments, _info = self._model.transcribe(
+                    np.zeros(8000, dtype=np.float32), language=self.language,
+                    beam_size=1, vad_filter=False, condition_on_previous_text=False)
+                for _ in segments:
+                    break
+                box.put("ok")
+            except Exception as exc:  # noqa: BLE001
+                box.put(exc)
+
+        thread = threading.Thread(target=run, name="ts-whisper-probe", daemon=True)
+        thread.start()
+        try:
+            value = box.get(timeout=20)
+        except queue.Empty:
+            raise EngineUnavailable(
+                "faster-whisper did not answer within 20 s on this GPU "
+                "(CTranslate2 has no kernel for it); use the Chinese engine instead")
+        if isinstance(value, Exception):
+            raise EngineUnavailable(f"faster-whisper cannot run here: {value}")
 
     def transcribe(self, samples: np.ndarray, sample_rate: int = 16000) -> ASRResult:
         start = time.perf_counter()

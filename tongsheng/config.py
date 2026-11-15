@@ -152,7 +152,7 @@ class ASRConfig:
     en_engine: str = "whisper"      # whisper | funasr | fake
     device: str = "cuda"
     allow_cpu_fallback: bool = False   # never silently drop to CPU ASR
-    gpu_fallback: str = "whisper"      # funasr -> whisper on the same GPU; "" disables
+    gpu_fallback: str = ""             # keep FunASR only: whisper stalls on RTX 50
     whisper_size: str = "small"
     whisper_dir: str = "auto"
     funasr_model: str = "paraformer-zh"

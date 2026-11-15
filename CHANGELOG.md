@@ -1,5 +1,27 @@
 ﻿# Changelog
 
+## 1.1.7 - 2026-11-15 (训练打标回到 FunASR，完全照项目 A 的做法)
+
+日志证据：打标阶段每个片段都在 **whisper 上整 45 秒超时**——
+
+```
+labelling clip 0001.wav (2.3s audio) with faster-whisper
+ASR timed out after 45s; skipping this clip      ← 每片都一样
+```
+
+结论：`faster-whisper` 的 CTranslate2 内核在 RTX 50（Blackwell）上跑不起来，
+首次推理直接阻塞；FunASR 本身在那台机器是好的（`FunASR ready on cuda`）。
+
+### Changed
+- **打标改用实时引擎 FunASR**（和项目 A 完全一致：`AutoModel(model=<本地目录>,
+  device="cuda", disable_update=True)` 逐片段识别）
+- **默认关闭 whisper 兜底**（`asr.gpu_fallback: ""`）：它就是会在 50 系上卡住的引擎，
+  只有在需要时才手动打开
+- **whisper 加载后加 20 秒探针**：跑不起来立刻报“此卡不支持 CTranslate2”，
+  而不是在真正识别时静默卡 45 秒
+- 升级统一为**覆盖式**：只发 `TongSheng-<版本>-update.zip`，解压后运行
+  `apply_update.bat`；不再生成升级安装包
+
 ## 升级方式变更：覆盖式更新（2026-11-15）
 
 从 1.1.6 起不再使用“升级安装包”，改为**目录覆盖**：

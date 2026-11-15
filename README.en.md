@@ -8,7 +8,7 @@ ASR → correction → translation → GPT-SoVITS v4 voice cloning, entirely on 
 Audio never leaves the box.
 
 > Author: **Ahee52**
-> Status: **1.1.6**
+> Status: **1.1.7**
 > Packaged build: **TongSheng-1.1.3-Setup** — ~14.1 GB installed, 10.67 GB installer (1 exe + 7 bins)
 > Install dir: `%ProgramFiles%\TongSheng`
 > Config / logs: `<install>\config.yaml`, `<install>\logs\app.log`
