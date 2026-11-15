@@ -28,6 +28,11 @@ Put every file in one folder and run the `.exe`. A missing slice aborts the inst
   model folders and v4 weights, llama-server, audio endpoints, English NLTK data, ASR load,
   English synthesis, training backend. Report: `logs\selftest.txt`.
   The setup offers "Run the self-test now" on the final page.
+- **Training works in the installed build**: `tools\run_upstream.py` and `tools\s1shim/`
+  now ship with the package (without them the upstream text/phoneme step died with
+  `ModuleNotFoundError: No module named 'text'`)
+- **Status line under the speed slider**: loading / ready / listening / translating /
+  speaking, always visible
 - **Training finishes cleanly**: the training workspace is now
   `<data>\training\characters` (it used to collide with `voice-repository`, so installing the
   voice tried to copy `reference.wav` onto itself and died with `WinError 32`); file copies

@@ -314,9 +314,15 @@ class MainWindow(QWidget):
         self.warmup_button.setText(t("warmup.running") if warming else t("menu.warmup"))
 
     # -- service signals ------------------------------------------------
-    def _on_state(self, state: str, _message: str) -> None:
+    def _on_state(self, state: str, message: str) -> None:
+        self._hint_state = state
+        self._hint_message = message
+        if message == "ready":
+            self._hint_ready = True
         if hasattr(self, "meter"):
             self.meter.set_recording(state == "listening")
+        if hasattr(self, "hint"):
+            self._update_hint()
         mapping = {
             "idle": t("state.idle"), "listening": t("state.listening"),
             "working": t("state.asr"), "speaking": t("state.playing"),
@@ -364,7 +370,22 @@ class MainWindow(QWidget):
 
     # -- i18n -----------------------------------------------------------
     def _update_hint(self) -> None:
-        hint = t("notify.record_on") if self.config.ui.record_output else t("notify.record_off")
+        state = getattr(self, "_hint_state", "idle")
+        message = getattr(self, "_hint_message", "")
+        if state == "listening":
+            hint = t("hint.listening")
+        elif state == "working":
+            hint = t("hint.working")
+        elif state == "speaking":
+            hint = t("hint.speaking")
+        elif state == "error":
+            hint = t("hint.error")
+        elif message in ("starting", "warming") or not getattr(self, "_hint_ready", False):
+            hint = t("hint.loading")
+        else:
+            hint = t("hint.ready")
+        hint += "   ·   " + (t("notify.record_on") if self.config.ui.record_output
+                             else t("notify.record_off"))
         target = self.config.target_language
         if not speaks_target(target):
             label = output_language_label(target, i18n.language())

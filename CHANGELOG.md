@@ -11,6 +11,10 @@
 - **安装目录不可写**：`%ProgramFiles%\TongSheng` 对普通用户只读，导致日志、
   配置、训练数据集写不进去。新增 `paths.user_root()`：安装目录可写就用它，
   否则自动落到 `%LOCALAPPDATA%\TongSheng`（配置、日志、录音、自训音色都在那里）。
+- **训练在“文本/音素提取”阶段失败**：打包版缺 `tools\run_upstream.py` 与
+  `tools\s1shim/`，项目 A 的上游启动器找不到，`1-get-text.py` 里的
+  `from text.cleaner import ...` 直接 `ModuleNotFoundError`。现在这两个文件随包分发，
+  训练子进程按 A 的方式补 `sys.path` 并加载 Lightning 垫片。
 - **训练最后一步报 PermissionError**：训练完成、音色安装时把 `reference.wav`
   复制到它自己身上（项目 A 的 character 目录被指到了 `voice-repository`，与安装目标同名），
   Windows 直接抛 `WinError 32`。现在：
@@ -26,6 +30,9 @@
   50 系显卡上的 `'NoneType' object is not callable`。
 
 ### Added
+- **主界面状态提示**：`语速` 滑块下方新增一行常驻状态——
+  “模型加载中…／可以开始了…／正在听你说…／正在识别与翻译…／正在播放译文…”，
+  后面跟随录音开关状态；任何状态变化都会立即更新。
 - **安装后自检 `tools/selftest.py`**（参照项目 A）：
   Python/torch、GPU 与显存、模型目录与 v4 权重、llama-server、音频端点、
   英文音素（NLTK）、ASR 加载、英文合成、训练后端，逐项 PASS/FAIL，

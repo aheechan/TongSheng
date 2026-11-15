@@ -152,6 +152,14 @@ def build_groups() -> list[Group]:
         prompts = PRIVATE_VOICE / "assets" / "prompts"
         if prompts.is_dir():
             vendor.dirs.append((prompts, "assets/prompts"))
+        # training subprocesses need the embedded-python launcher and the
+        # Lightning shim, exactly like project A does at its own project root
+        runner = PRIVATE_VOICE / "tools" / "run_upstream.py"
+        if runner.exists():
+            vendor.files.append((runner, "tools/run_upstream.py"))
+        shim = PRIVATE_VOICE / "tools" / "s1shim"
+        if shim.is_dir():
+            vendor.dirs.append((shim, "tools/s1shim"))
         groups.append(vendor)
 
     # 6b. NLTK data required by the English front-end (g2p_en)
