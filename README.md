@@ -2,10 +2,9 @@
 
 <img src="tongsheng/assets/TS-mic.svg" width="120" alt="TongSheng">
 
-# 同声 · TongSheng
+# TongSheng
 
-**用你的声音，说任何语言。**
-*Your voice, any language.*
+**Your voice, any language.**
 
 Local speech translation · GPT-SoVITS voice cloning · Windows tray app
 
