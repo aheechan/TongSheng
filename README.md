@@ -15,7 +15,7 @@
 
 > 作者：**Ahee52**
 > 状态：**1.1.11**
-> 打包构建：**TongSheng-1.1.3-Setup**（1.1.4 提供 2.2 MB 升级包） — 安装后约 **14.1 GB**，安装包 **10.67 GB**（1 个 exe + 7 个 bin）
+> 打包构建：**TongSheng-1.1.11-Setup** — 安装后约 **14.1 GB**，安装包 **10.66 GB**（1 个 exe + 7 个 bin）
 > 安装目录：`%ProgramFiles%\TongSheng`
 > 配置 / 日志：`<安装目录>\config.yaml`、`<安装目录>\logs\app.log`
 > 模型：`<安装目录>\GPT-SoVITS\GPT_SoVITS\pretrained_models`、`<安装目录>\models`
@@ -87,7 +87,7 @@ config.example.yaml   配置模板
 
 | 方式 | 适合 | 需要 |
 |---|---|---|
-| **安装包** | 直接使用 | 下载 1 个 `.exe` + 2 个 `.bin` 分卷 |
+| **安装包** | 直接使用 | 下载 1 个 `.exe` + 7 个 `.bin` 分卷 |
 | **源码** | 开发 / 二次修改 | Python 3.12、NVIDIA 显卡、约 20 GB 磁盘、自行准备模型 |
 
 安装包内置 Python 运行时与全部模型，装完即可说话，**不需要装 Python**。
@@ -328,14 +328,14 @@ python tools\make_installer_assets.py
 "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\TongSheng.iss
 ```
 
-产物在 `dist\installer\`（实测 10.67 GB，LZMA2 压缩率约 0.74）：
+产物在 `dist\installer\`（实测 10.66 GB，LZMA2 压缩率约 0.74）：
 
 ```
-TongSheng-1.1.3-Setup.exe      6.1 MB     引导程序（含图标与英文向导）
-TongSheng-1.1.3-Setup-1.bin    1.77 GB    数据分卷 1
-TongSheng-1.1.3-Setup-2…6.bin  1.77 GB    数据分卷 2–6
-TongSheng-1.1.3-Setup-7.bin    28 MB      数据分卷 7
-SHA256SUMS.txt                            校验和
+TongSheng-1.1.11-Setup.exe      6.1 MB     引导程序（含图标与英文向导）
+TongSheng-1.1.11-Setup-1.bin    1.76 GB    数据分卷 1
+TongSheng-1.1.11-Setup-2…6.bin  1.77 GB    数据分卷 2–6
+TongSheng-1.1.11-Setup-7.bin    45.8 MB    数据分卷 7
+SHA256SUMS.txt                             校验和
 ```
 
 安装界面为**纯英文**，配色与图标跟随本项目（深色卡片 + TS 麦克风图标）。

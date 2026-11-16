@@ -20,7 +20,7 @@ Audio never leaves the box.
 
 > Author: **Ahee52**
 > Status: **1.1.11**
-> Packaged build: **TongSheng-1.1.3-Setup** — ~14.1 GB installed, 10.67 GB installer (1 exe + 7 bins)
+> Packaged build: **TongSheng-1.1.11-Setup** — ~14.1 GB installed, 10.66 GB installer (1 exe + 7 bins)
 > Install dir: `%ProgramFiles%\TongSheng`
 > Config / logs: `<install>\config.yaml`, `<install>\logs\app.log`
 
@@ -73,7 +73,7 @@ CPU inference is not supported. Bluetooth/HDMI audio is out of scope; 3.5 mm and
 
 | Route | For | Needs |
 |---|---|---|
-| **Installer** | End users | 1 `.exe` + 2 `.bin` slices |
+| **Installer** | End users | 1 `.exe` + 7 `.bin` slices |
 | **Source** | Development | Python 3.12, NVIDIA GPU, ~20 GB disk, models |
 
 ### Option 1: Installer (from Releases)
@@ -168,8 +168,8 @@ python tools\make_installer_assets.py
 "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\TongSheng.iss
 ```
 
-The result lands in `dist\installer\` (10.67 GB total, LZMA2 ratio ~0.74): one 6 MB
-`TongSheng-1.1.3-Setup.exe`, seven `TongSheng-1.1.3-Setup-N.bin` slices of 1.77 GB (under
+The result lands in `dist\installer\` (10.66 GB total, LZMA2 ratio ~0.74): one 6.1 MB
+`TongSheng-1.1.11-Setup.exe`, seven `TongSheng-1.1.11-Setup-N.bin` slices of ~1.77 GB (under
 GitHub's 2 GB per-asset limit) and `SHA256SUMS.txt`.
 The wizard is English-only and uses the same dark artwork and microphone icon as the app.
 Upload the `.exe` **and every `.bin`** to the release - a missing slice aborts the install.
