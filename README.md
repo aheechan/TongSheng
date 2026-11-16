@@ -92,6 +92,18 @@ config.example.yaml   配置模板
 
 安装包内置 Python 运行时与全部模型，装完即可说话，**不需要装 Python**。
 
+### 方式一：安装包（从 Releases 下载）
+
+> 发布页：<https://github.com/aheechan/TongSheng/releases>
+
+1. 打开 Releases，下载**同一版本的全部文件**：`TongSheng-<版本>-Setup.exe` 与同名 `.bin` 分卷
+2. **所有文件必须放在同一个文件夹**，缺任何一个分卷都会安装失败
+3. 双击 `.exe` 运行；文件较大，首次校验约 1–3 分钟
+4. 默认安装到 `%ProgramFiles%\TongSheng`，安装后约 14 GB
+5. 首次启动会自动预热模型（约 30–60 秒），之后按热键即可说话
+
+> GitHub 单文件上限 2 GB，所以安装包按约 1.8 GB 分卷，属正常现象。
+
 ---
 
 ## 硬件要求
@@ -441,3 +453,9 @@ CTranslate2（MIT）、llama.cpp（MIT）、PySide6（LGPLv3，动态链接）�
 那它就不只是一个语音合成的演示。
 
 **愿沟通无碍，愿声音被善待。**
+
+---
+
+## 支持
+
+如果这个项目帮你省了点时间，可以[请我喝杯咖啡](https://ko-fi.com/ahee52)。

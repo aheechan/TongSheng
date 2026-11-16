@@ -1,4 +1,15 @@
+<div align="center">
+
+<img src="tongsheng/assets/TS-mic.svg" width="120" alt="TongSheng">
+
 # 同声 · TongSheng
+
+**用你的声音，说任何语言。**
+*Your voice, any language.*
+
+Local speech translation · GPT-SoVITS voice cloning · Windows tray app
+
+</div>
 
 **English** | [中文](README.md)
 
@@ -64,6 +75,18 @@ CPU inference is not supported. Bluetooth/HDMI audio is out of scope; 3.5 mm and
 |---|---|---|
 | **Installer** | End users | 1 `.exe` + 2 `.bin` slices |
 | **Source** | Development | Python 3.12, NVIDIA GPU, ~20 GB disk, models |
+
+### Option 1: Installer (from Releases)
+
+> Releases page: <https://github.com/aheechan/TongSheng/releases>
+
+1. Open Releases and download **every** asset of the same version: `TongSheng-<version>-Setup.exe` plus all `.bin` slices
+2. **Keep all files in one folder** — a missing slice aborts the installation
+3. Double-click the `.exe`; the first-time verification takes 1–3 minutes
+4. Installs to `%ProgramFiles%\TongSheng`, about 14 GB after installation
+5. The first launch warms up the models (30–60 s), then the hotkey is ready
+
+> GitHub caps a single file at 2 GB, which is why the installer ships as ~1.8 GB slices.
 
 ### From source
 
@@ -199,3 +222,9 @@ GPT-SoVITS (MIT), FunASR (MIT), faster-whisper (MIT), CTranslate2 (MIT), llama.c
 PySide6 (LGPLv3, dynamically linked), ModelScope (Apache-2.0), Index-Translate models.
 
 Integration by **Ahee52**, built on Project A (PrivateVoice) and Project B (ALT-VoiceType).
+
+---
+
+## Support
+
+If this project saved you some time, you can [buy me a coffee](https://ko-fi.com/ahee52).
