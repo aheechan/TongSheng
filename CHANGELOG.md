@@ -1,5 +1,34 @@
 ﻿# Changelog
 
+## 1.1.11 - 2026-11-16 (pythonw 下 stdout 为 None 导致 FunASR 假就绪；桌面图标)
+
+### 根因（由另一台机器的 agent 定位并复现）
+
+桌面快捷方式用 `pythonw.exe` 启动，这种进程里 `sys.stdout` / `sys.stderr` 是 `None`。
+FunASR 在 `generate()` 里用 tqdm 往 stderr 写进度条 →
+`AttributeError: 'NoneType' object has no attribute 'write'`。
+该异常被 ASR 包装吞掉、`warmup()` 又不看返回值里的 error，于是：
+
+```
+AutoModel 加载成功 → 日志"FunASR ready on cuda"
+首次 generate 毫秒级失败 → 无日志
+托盘仍显示"识别模型已就绪" → 实际一个字都识别不出来
+```
+
+`run.bat`（python.exe，有控制台）不触发，所以 3090 上一直正常。
+
+### Fixed
+
+- **`tongsheng/__init__.py` 新增 `_repair_std_streams()`**：包导入时（早于任何模型代码与
+  logging 绑定）把为 `None` 的 stdout/stderr 指向 `os.devnull`。快捷方式、`run.bat`、
+  `-m tongsheng` 三种入口都覆盖
+- `ASREngine.warmup()` 改为**严格**：结果带 error 就抛 `EngineUnavailable`，
+  `_prepare()` 转为 `asr-failed` 状态并在托盘提示，不再"假就绪"
+- `funasr_zh.transcribe()` 异常分支补 `log.error`，以后不会再出现"日志全绿但不认字"
+- **桌面/开始菜单图标**：`app.ico` 之前随阶段目录生成顺序丢失，安装后快捷方式显示空白
+  文档图标。现在打包阶段结尾强制把 `app.ico` 复制进安装根目录
+- 打包时剔除残留的 `ctranslate2-4.8*.dist-info`（与 4.9 混装会让 faster-whisper 失效）
+
 ## 1.1.10 - 2026-11-15 (崩溃根除 + 训练可观测；不做显存限制)
 
 ### 策略

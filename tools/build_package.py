@@ -33,6 +33,8 @@ ALT = Path(r"C:\Local Repositories\ALT-VoiceType")
 LLAMA = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Packages"
 
 SKIP_DIRS = {".git", "__pycache__", "logs", "TEMP", ".venv", ".pytest_cache"}
+# a mixed ctranslate2 install (4.8.4 dist-info next to 4.9.0) breaks faster-whisper
+SKIP_NAME_PARTS = ("ctranslate2-4.8",)
 SKIP_SUFFIXES = {".pyc", ".pyo", ".log"}
 
 
@@ -56,6 +58,8 @@ def _walk_files(root: Path, skip: tuple[str, ...]) -> list[Path]:
             if name.endswith(tuple(SKIP_SUFFIXES)):
                 continue
             if any(s in name for s in skip):
+                continue
+            if any(part in str(Path(dirpath) / name) for part in SKIP_NAME_PARTS):
                 continue
             out.append(Path(dirpath) / name)
     return out
@@ -204,6 +208,13 @@ def _force_remove(path: Path) -> None:
     shutil.rmtree(path, onerror=retry)
 
 
+def _copy_icon(dest: Path) -> None:
+    """The desktop shortcut points at {app}\app.ico; make sure it is there."""
+    icon = DIST / "installer_assets" / "app.ico"
+    if icon.is_file() and dest.is_dir():
+        (dest / "app.ico").write_bytes(icon.read_bytes())
+
+
 def stage(groups: list[Group], dest: Path) -> None:
     if dest.exists():
         _force_remove(dest)
@@ -234,6 +245,7 @@ def stage(groups: list[Group], dest: Path) -> None:
             for path in _walk_files(root, group.skip):
                 # rel already carries the in-package prefix for this group
                 link(path, base / rel / path.relative_to(root), group.copy)
+    _copy_icon(dest)
     print(f"staged: {linked} hardlinked, {copied} copied -> {dest}")
 
 

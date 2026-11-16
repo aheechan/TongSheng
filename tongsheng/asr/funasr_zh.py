@@ -173,6 +173,7 @@ class FunASREngine(ASREngine):
                 assert self._model is not None
                 out = self._model.generate(input=data, batch_size_s=300)
             except Exception as exc:  # noqa: BLE001
+                log.error("FunASR transcribe failed: %s: %s", type(exc).__name__, exc)
                 return ASRResult(language="zh", engine=self.name,
                                  latency_ms=(time.perf_counter() - start) * 1000,
                                  error=f"{type(exc).__name__}: {exc}")

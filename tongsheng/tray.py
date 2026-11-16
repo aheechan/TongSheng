@@ -650,6 +650,10 @@ class TongShengTray(QObject):
             language = message.split(":", 1)[1]
             self._notify(t("app.name"),
                          t("notify.asr_warming", lang=LANGUAGES.get(language, language)))
+        elif message.startswith("asr-failed:"):
+            detail = message.split(":", 2)[-1]
+            self._notify(t("app.name"), f"语音识别不可用 / speech recognition unavailable: {detail}")
+            log.error("ASR unavailable: %s", detail)
         elif message.startswith("asr-ready:"):
             language = message.split(":", 1)[1]
             self._notify(t("app.name"),

@@ -169,8 +169,8 @@ class TongShengService:
                 log.warning("server: %s", err)
         self._build_pipeline()
         if self.config.asr.warmup:
+            language = self.config.language
             try:
-                language = self.config.language
                 self.asr_engine(language).warmup()
                 self._asr_ready.add(language)
                 self.on_status(f"asr-ready:{language}")
