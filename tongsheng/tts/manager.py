@@ -158,6 +158,7 @@ class TTSRuntime:
 
     # -- synthesis ------------------------------------------------------
     def speak(self, text: str, mode: str, player: StreamingPlayer,
+              out_subdir: str = "rec",
               text_lang: str | None = None,
               on_sentence: Callable[[str], None] | None = None) -> SpeechResult:
         self._stop.clear()
@@ -219,7 +220,7 @@ class TTSRuntime:
                     return result
                 audio = wavmod.resample(audio, sr, tier.sample_rate)
                 produced_sr = tier.sample_rate
-                result.path = self._save_recording(audio, produced_sr)
+                result.path = self._save_recording(audio, produced_sr, out_subdir)
                 player.push(audio, produced_sr)
                 total_samples = audio.size
             else:
@@ -343,9 +344,10 @@ class TTSRuntime:
         audio = wavmod.resample(audio, sr, tier.sample_rate)
         return wavmod.write_wav(path, audio, tier.sample_rate)
 
-    def _save_recording(self, audio: np.ndarray, sr: int) -> Path | None:
+    def _save_recording(self, audio: np.ndarray, sr: int,
+                        subdir: str = "rec") -> Path | None:
         base = self.models.results or Path("results")
-        folder = base / "rec"
+        folder = base / subdir
         folder.mkdir(parents=True, exist_ok=True)
         name = time.strftime("%Y%m%d-%H%M%S") + f"-{sr // 1000}k.wav"
         return wavmod.write_wav(folder / name, audio, sr)

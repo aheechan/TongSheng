@@ -456,6 +456,17 @@ class TongShengTray(QObject):
                      t("notify.asr_warming", lang=LANGUAGES.get(language, language)))
         log.info("input language -> %s", language)
 
+    def _set_ui_language(self, language: str) -> None:
+        """Text mode: the language toggle changes the interface only."""
+        language = normalize_language(language)
+        self.config.ui.language = language
+        i18n.set_language(language)
+        self.lang_actions[language].setChecked(True)
+        self._rebuild_output_menu()
+        self._save()
+        self._retranslate()
+        log.info("ui language -> %s (text mode)", language)
+
     def _set_output_language(self, code: str) -> None:
         self.config.translate.target_language = code
         self.service.set_output_language(code)

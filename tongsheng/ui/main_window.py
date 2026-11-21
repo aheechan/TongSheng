@@ -12,16 +12,19 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
-    QSlider, QTextEdit, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QSizePolicy, QSlider, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from .. import APP_NAME, __version__, i18n
 from ..config import (LANGUAGES, MODE_LABELS, output_language_label,
                       output_languages, speaks_target)
+from ..logs import get_logger
 from ..service import State, TurnResult
 from . import palette
 from .meter import LevelMeter
+
+log = get_logger("ui.main")
 
 t = i18n.t
 
@@ -128,6 +131,18 @@ class MainWindow(QWidget):
         self.train_button.setObjectName("ghost")
         self.train_button.clicked.connect(self.tray.open_training)
         header.addWidget(self.train_button)
+
+        mode_box = QVBoxLayout()
+        mode_box.setSpacing(2)
+        self.mode_row = ToggleRow(
+            [("voice", t("mode.voice")), ("text", t("mode.text"))], self._on_mode)
+        mode_box.addWidget(self.mode_row)
+        self.mode_caption = QLabel(t("mode.caption"))
+        self.mode_caption.setObjectName("hint")
+        self.mode_caption.setAlignment(Qt.AlignCenter)
+        mode_box.addWidget(self.mode_caption)
+        header.addLayout(mode_box)
+
         self.state_label = QLabel()
         self.state_label.setObjectName("state")
         self.state_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -142,7 +157,17 @@ class MainWindow(QWidget):
         self.record_box.setChecked(self.config.ui.record_output)
         self.record_box.toggled.connect(self._on_record)
         row.addWidget(self.record_box, 1)
+        self.text_input = QLineEdit()
+        self.text_input.setPlaceholderText(t("mode.text_placeholder"))
+        self.text_input.returnPressed.connect(self._run_text)
+        self.text_input.setVisible(False)
+        row.addWidget(self.text_input, 1)
         root.addLayout(row)
+
+        self.text_hint = QLabel(t("mode.text_langs"))
+        self.text_hint.setObjectName("hint")
+        self.text_hint.setVisible(False)
+        root.addWidget(self.text_hint)
 
         # input language (ASR + UI)
         row, _ = self._setting_row("language")
@@ -222,6 +247,7 @@ class MainWindow(QWidget):
 
         self._fill_voices()
         self._fill_output_languages()
+        self._apply_mode()
 
     def _setting_row(self, key: str) -> tuple[QHBoxLayout, Any]:
         row = QHBoxLayout()
@@ -273,8 +299,59 @@ class MainWindow(QWidget):
         self.tray.set_record_output(enabled)
         self._update_hint()
 
+    def _on_mode(self, mode: str) -> None:
+        text_mode = mode == "text"
+        if text_mode == self.config.ui.text_mode:
+            self._apply_mode()
+            return
+        self.config.ui.text_mode = text_mode
+        self.tray._save()
+        self._apply_mode()
+        if text_mode:
+            self.service.release_asr()
+            self.hint.setText(t("mode.text_langs"))
+        else:
+            self.service.warmup_asr()
+            self.hint.setText(t("notify.asr_warming", lang=""))
+        log.info("mode -> %s", "text" if text_mode else "voice")
+
+    def _apply_mode(self) -> None:
+        text_mode = bool(self.config.ui.text_mode)
+        self.record_box.setVisible(not text_mode)
+        self.text_input.setVisible(text_mode)
+        self.text_hint.setVisible(text_mode)
+        if hasattr(self, "meter"):
+            self.meter.setVisible(not text_mode)
+        self.mode_row.set_current("text" if text_mode else "voice")
+        self.quality_label.setText(t("row.text") if text_mode else t("menu.mode"))
+        self.language_label.setText(
+            t("settings.ui_language") if text_mode else t("settings.input_language"))
+        self.warmup_button.setVisible(not text_mode)
+        self._refresh_talk_label()
+        self._update_hint()
+
+    def _refresh_talk_label(self) -> None:
+        text_mode = bool(self.config.ui.text_mode)
+        if text_mode:
+            self.talk_button.setText("✍  " + t("menu.start_text"))
+        elif self.service.state == State.LISTENING:
+            self.talk_button.setText("⏹  " + t("menu.stop"))
+        else:
+            self.talk_button.setText("🎙  " + t("menu.start"))
+
+    def _run_text(self) -> None:
+        value = self.text_input.text().strip()
+        if not value:
+            self.text_input.setFocus()
+            return
+        if self.service.begin_text(value):
+            self.text_input.clear()
+
     def _on_input_language(self, language: str) -> None:
-        self.tray._set_input_language(language)
+        if self.config.ui.text_mode:
+            self.tray._set_ui_language(language)
+        else:
+            self.tray._set_input_language(language)
         self.lang_row.set_current(self.config.language)
         self._fill_output_languages()
         self.retranslate()
@@ -304,6 +381,9 @@ class MainWindow(QWidget):
         self._fill_voices()
 
     def _toggle_talk(self) -> None:
+        if self.config.ui.text_mode:
+            self._run_text()
+            return
         if self.service.state == State.LISTENING:
             self.service.end()
         else:
@@ -332,10 +412,7 @@ class MainWindow(QWidget):
         self.state_label.setProperty("busy", state in ("working", "listening", "speaking"))
         self.state_label.style().unpolish(self.state_label)
         self.state_label.style().polish(self.state_label)
-        if state == "listening":
-            self.talk_button.setText("⏹  " + t("menu.stop"))
-        else:
-            self.talk_button.setText("🎙  " + t("menu.start"))
+        self._refresh_talk_label()
 
     def _on_turn(self, turn: TurnResult) -> None:
         existing = self.transcript.toPlainText()
@@ -364,6 +441,8 @@ class MainWindow(QWidget):
         elif message == "warmup:done":
             self.set_warming(False)
             self._update_hint()
+        elif message.startswith("text:saved:"):
+            self.hint.setText(t("notify.text_saved") + "  ·  " + message.split(":", 2)[-1])
         elif message.startswith("warmup:failed:"):
             self.set_warming(False)
             self.hint.setText(t("warmup.failed", message=message.split(":", 2)[-1]))
@@ -406,9 +485,14 @@ class MainWindow(QWidget):
                 label.setText(t(key))
         self.record_box.setText(t("menu.record"))
         self.record_box.setChecked(self.config.ui.record_output)
+        self.text_input.setPlaceholderText(t("mode.text_placeholder"))
+        self.text_hint.setText(t("mode.text_langs"))
+        self.mode_caption.setText(t("mode.caption"))
+        self.mode_row.retranslate([("voice", t("mode.voice")), ("text", t("mode.text"))])
+        self._apply_mode()
         self.lang_row.set_current(self.config.language)
         self._fill_output_languages()
-        self.talk_button.setText("🎙  " + t("menu.start"))
+        self._refresh_talk_label()
         self.warmup_button.setText(t("menu.warmup"))
         self.train_button.setText(t("train.title"))
         self.settings_button.setText(t("menu.settings").replace("…", ""))

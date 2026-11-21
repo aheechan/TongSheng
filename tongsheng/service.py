@@ -384,6 +384,111 @@ class TongShengService:
         if self.tts.set_voice(voice_id) is not None:
             self.on_status(f"voice: {voice_id}")
 
+    # -- text mode (beta): typed text in, translated speech + wav out ------
+    def begin_text(self, text: str) -> bool:
+        value = (text or "").strip()
+        if not value:
+            return False
+        if self._state is State.WORKING:
+            self.on_error("上一段还在处理，按 ESC 可以取消")
+            return False
+        self.player.stop()
+        self._set_state(State.WORKING, "text")
+        self._turn_id += 1
+        turn_id = self._turn_id
+        self._worker = threading.Thread(target=self._process_text,
+                                        args=(value, turn_id), name="ts-text", daemon=True)
+        self._worker.start()
+        return True
+
+    def _process_text(self, text: str, turn_id: int | None = None) -> None:  # noqa: ANN001
+        from .text import detect_script_language
+
+        cfg = self.config
+        source = detect_script_language(text)
+        target = cfg.target_language or other_language(source)
+        if target == source:
+            target = other_language(source)
+        result = TurnResult(source_lang=source, target_lang=target, mode="rec")
+        result.raw = text
+        result.corrected = text
+        started = time.perf_counter()
+        try:
+            self._build_pipeline()
+            self._set_state(State.WORKING, "translate")
+            translate_start = time.perf_counter()
+            translation = text
+            if target != source and self._translator is not None:
+                try:
+                    translation = self._translator.translate(text, target, source,
+                                                             glossary=cfg.translate.glossary)
+                except TranslationError as exc:
+                    result.error = str(exc)
+                    self.on_error(str(exc))
+            result.translation = translation
+            result.translate_ms = (time.perf_counter() - translate_start) * 1000.0
+
+            if speaks_target(target):
+                self._set_state(State.SPEAKING, "speak")
+                speech = self.tts.speak(translation, "rec", self.player,
+                                        out_subdir="rec-text", text_lang=target)
+                if speech.error and not result.error:
+                    result.error = speech.error
+                if speech.path is not None:
+                    result.audio_path = str(speech.path)
+                    self.on_status(f"text:saved:{speech.path}")
+            self._append_history(result)
+            self.on_turn(result)
+            log.info("text turn %.1fs: %s -> %s", time.perf_counter() - started,
+                     result.raw[:24], result.translation[:24])
+        except Exception as exc:  # noqa: BLE001
+            result.error = f"{type(exc).__name__}: {exc}"
+            log.exception("text turn failed")
+            self.on_error(result.error)
+            self._set_state(State.ERROR, str(exc))
+            time.sleep(0.2)
+        finally:
+            if turn_id is not None and turn_id != self._turn_id:
+                log.info("stale text turn %s finished", turn_id)
+            else:
+                self.cleanup_recordings()
+                self._set_state(State.IDLE, "ready")
+
+    def release_asr(self) -> None:
+        """Free the ASR engines (text mode does not need them)."""
+        released = 0
+        for key in list(self._engines):
+            engine = self._engines.pop(key)
+            try:
+                engine.close()
+                released += 1
+            except Exception as exc:  # noqa: BLE001
+                log.debug("close %s failed: %s", key, exc)
+        self._asr_ready.clear()
+        try:
+            import torch
+
+            torch.cuda.empty_cache()
+        except Exception:  # noqa: BLE001
+            pass
+        if released:
+            log.info("released %d ASR engine(s) for text mode", released)
+
+    def warmup_asr(self) -> None:
+        """Reload and warm the ASR engine after leaving text mode."""
+        def run() -> None:
+            language = self.config.language
+            try:
+                self.asr_engine(language).warmup()
+                self._asr_ready.add(language)
+                self.on_status(f"asr-ready:{language}")
+                log.info("ASR reloaded for voice mode")
+            except Exception as exc:  # noqa: BLE001
+                self.on_status(f"asr-failed:{language}:{exc}")
+                log.warning("ASR reload failed: %s", exc)
+
+        threading.Thread(target=run, name="ts-asr-reload", daemon=True).start()
+
     # -- capture --------------------------------------------------------
     def begin(self) -> bool:
         if self._state is State.WORKING:

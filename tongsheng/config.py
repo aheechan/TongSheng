@@ -293,6 +293,7 @@ class UIConfig:
     language: str = "zh"            # zh | en: INPUT language (ASR) and UI language
     mode: str = "rec"               # legacy: the synthesis pipeline is now single-tier
     record_output: bool = False     # save every synthesised wav to results/rec
+    text_mode: bool = False         # beta: text-to-recording instead of voice input
     hotkey: str = "lalt"            # lalt | ralt | alt | ctrl+alt | ctrl+shift+space …
     hotkey_mode: str = "smart"      # smart (tap latch / hold talk) | hold | toggle
     hotkey_threshold_ms: int = 280  # below this a tap is a toggle, above it a PTT

@@ -104,3 +104,22 @@ def strip_marks(text: str) -> str:
 
 
 __all__ = ["detect_language", "split_sentences", "strip_marks"]
+
+
+# Input languages the bundled speech front-end understands.
+TEXT_INPUT_LANGUAGES = ("zh", "en", "ja", "ko", "yue")
+
+
+def detect_script_language(text: str) -> str:
+    """Script based detection for typed text (zh / ja / ko / en)."""
+    value = (text or "")
+    for char in value:
+        code = ord(char)
+        if 0x3040 <= code <= 0x30FF:      # hiragana / katakana
+            return "ja"
+        if 0xAC00 <= code <= 0xD7AF:      # hangul
+            return "ko"
+    for char in value:
+        if 0x4E00 <= ord(char) <= 0x9FFF:
+            return "zh"
+    return "en"
