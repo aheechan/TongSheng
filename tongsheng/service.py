@@ -402,13 +402,11 @@ class TongShengService:
         return True
 
     def _process_text(self, text: str, turn_id: int | None = None) -> None:  # noqa: ANN001
-        from .text import detect_script_language
+        from .text import detect_script_language, resolve_target
 
         cfg = self.config
         source = detect_script_language(text)
-        target = cfg.target_language or other_language(source)
-        if target == source:
-            target = other_language(source)
+        target = resolve_target(source, cfg.target_language)
         result = TurnResult(source_lang=source, target_lang=target, mode="rec")
         result.raw = text
         result.corrected = text

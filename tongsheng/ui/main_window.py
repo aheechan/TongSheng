@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -159,10 +160,15 @@ class MainWindow(QWidget):
         self.record_box.setChecked(self.config.ui.record_output)
         self.record_box.toggled.connect(self._on_record)
         row.addWidget(self.record_box, 1)
-        self.text_input = QLineEdit()
+        self.text_input = QTextEdit()
         self.text_input.setPlaceholderText(t("mode.text_placeholder"))
-        self.text_input.returnPressed.connect(self._run_text)
+        self.text_input.setObjectName("transcript")
+        self.text_input.setAcceptRichText(False)
+        self.text_input.setFixedHeight(74)
+        self.text_input.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.text_input.setVisible(False)
+        submit = QShortcut(QKeySequence("Ctrl+Return"), self.text_input)
+        submit.activated.connect(self._run_text)
         row.addWidget(self.text_input, 1)
         root.addLayout(row)
 
@@ -213,7 +219,7 @@ class MainWindow(QWidget):
         # transcript
         self.transcript = QTextEdit()
         self.transcript.setReadOnly(True)
-        self.transcript.setMinimumHeight(150)
+        self.transcript.setMinimumHeight(110)
         self.transcript.setObjectName("transcript")
         root.addWidget(self.transcript, 1)
 
@@ -327,7 +333,7 @@ class MainWindow(QWidget):
         self.language_label.setText(
             t("settings.ui_language") if text_mode else t("settings.input_language"))
         self.warmup_button.setVisible(not text_mode)
-        self.setStyleSheet(palette.stylesheet(voice_mode=not text_mode))
+        self.setStyleSheet(palette.stylesheet(tinted=text_mode))
         self._refresh_talk_label()
         self._update_hint()
 
@@ -341,7 +347,7 @@ class MainWindow(QWidget):
             self.talk_button.setText("🎙  " + t("menu.start"))
 
     def _run_text(self) -> None:
-        value = self.text_input.text().strip()
+        value = self.text_input.toPlainText().strip()
         if not value:
             self.text_input.setFocus()
             return

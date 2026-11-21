@@ -123,3 +123,18 @@ def detect_script_language(text: str) -> str:
         if 0x4E00 <= ord(char) <= 0x9FFF:
             return "zh"
     return "en"
+
+
+def resolve_target(source: str, configured: str) -> str:
+    """Pick the output language for typed text.
+
+    An explicit choice always wins - even when it equals the input language
+    (you may want Chinese text read back in Chinese). Only an empty setting
+    falls back to the opposite language.
+    """
+    code = (configured or "").strip().lower()
+    if code:
+        return code
+    from .config import other_language
+
+    return other_language(source)
