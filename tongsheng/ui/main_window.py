@@ -134,9 +134,11 @@ class MainWindow(QWidget):
 
         mode_box = QVBoxLayout()
         mode_box.setSpacing(2)
-        self.mode_row = ToggleRow(
-            [("voice", t("mode.voice")), ("text", t("mode.text"))], self._on_mode)
-        mode_box.addWidget(self.mode_row)
+        self.mode_button = QPushButton()
+        self.mode_button.setObjectName("ghost")
+        self.mode_button.setCursor(Qt.PointingHandCursor)
+        self.mode_button.clicked.connect(self._toggle_mode)
+        mode_box.addWidget(self.mode_button)
         self.mode_caption = QLabel(t("mode.caption"))
         self.mode_caption.setObjectName("hint")
         self.mode_caption.setAlignment(Qt.AlignCenter)
@@ -164,10 +166,6 @@ class MainWindow(QWidget):
         row.addWidget(self.text_input, 1)
         root.addLayout(row)
 
-        self.text_hint = QLabel(t("mode.text_langs"))
-        self.text_hint.setObjectName("hint")
-        self.text_hint.setVisible(False)
-        root.addWidget(self.text_hint)
 
         # input language (ASR + UI)
         row, _ = self._setting_row("language")
@@ -299,6 +297,9 @@ class MainWindow(QWidget):
         self.tray.set_record_output(enabled)
         self._update_hint()
 
+    def _toggle_mode(self) -> None:
+        self._on_mode("voice" if self.config.ui.text_mode else "text")
+
     def _on_mode(self, mode: str) -> None:
         text_mode = mode == "text"
         if text_mode == self.config.ui.text_mode:
@@ -309,24 +310,24 @@ class MainWindow(QWidget):
         self._apply_mode()
         if text_mode:
             self.service.release_asr()
-            self.hint.setText(t("mode.text_langs"))
         else:
             self.service.warmup_asr()
-            self.hint.setText(t("notify.asr_warming", lang=""))
+        self._update_hint()
         log.info("mode -> %s", "text" if text_mode else "voice")
 
     def _apply_mode(self) -> None:
         text_mode = bool(self.config.ui.text_mode)
         self.record_box.setVisible(not text_mode)
         self.text_input.setVisible(text_mode)
-        self.text_hint.setVisible(text_mode)
         if hasattr(self, "meter"):
             self.meter.setVisible(not text_mode)
-        self.mode_row.set_current("text" if text_mode else "voice")
+        self.mode_button.setText(t("mode.text") if text_mode else t("mode.voice"))
+        self.mode_button.setToolTip(t("mode.caption"))
         self.quality_label.setText(t("row.text") if text_mode else t("menu.mode"))
         self.language_label.setText(
             t("settings.ui_language") if text_mode else t("settings.input_language"))
         self.warmup_button.setVisible(not text_mode)
+        self.setStyleSheet(palette.stylesheet(voice_mode=not text_mode))
         self._refresh_talk_label()
         self._update_hint()
 
@@ -486,9 +487,7 @@ class MainWindow(QWidget):
         self.record_box.setText(t("menu.record"))
         self.record_box.setChecked(self.config.ui.record_output)
         self.text_input.setPlaceholderText(t("mode.text_placeholder"))
-        self.text_hint.setText(t("mode.text_langs"))
         self.mode_caption.setText(t("mode.caption"))
-        self.mode_row.retranslate([("voice", t("mode.voice")), ("text", t("mode.text"))])
         self._apply_mode()
         self.lang_row.set_current(self.config.language)
         self._fill_output_languages()

@@ -13,7 +13,23 @@ BLUE = "#35C5FF"
 ACCENT = "#2F8DFF"
 ERROR = "#FF6B6B"
 
-STYLESHEET = f"""
+VOICE_BG = "#0A1A15"
+VOICE_PANEL = "#0F2620"
+VOICE_PANEL_HI = "#143128"
+VOICE_LINE = "#1C4136"
+
+
+def stylesheet(voice_mode: bool = False) -> str:
+    """Dark sheet, subtly greener in voice mode so the mode is felt at a glance."""
+    if not voice_mode:
+        return _SHEET
+    return (_SHEET.replace(PANEL_HI, VOICE_PANEL_HI)
+                  .replace(PANEL, VOICE_PANEL)
+                  .replace(LINE, VOICE_LINE)
+                  .replace(BG, VOICE_BG))
+
+
+_SHEET = f"""
 QWidget {{
     background: {BG};
     color: {TEXT};
@@ -204,4 +220,7 @@ QMenu::item:selected {{
 }}
 """
 
-__all__ = ["STYLESHEET"]
+STYLESHEET = stylesheet(False)
+
+__all__ = ["STYLESHEET", "stylesheet", "BG", "PANEL", "PANEL_HI", "LINE",
+           "TEXT", "MUTED", "CYAN", "BLUE", "ACCENT", "ERROR"]
