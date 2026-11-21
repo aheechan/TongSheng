@@ -24,9 +24,13 @@ if not exist "%DEST%\runtime\python.exe" (
   exit /b 2
 )
 
-rem Make sure TongSheng is not running: it holds .pyd/.dll files open.
-tasklist /FI "IMAGENAME eq pythonw.exe" | find /I "pythonw.exe" >nul && (
-  echo [WARN] pythonw.exe is running. Quit TongSheng first, then re-run.
+rem Make sure *this* installation is not running: it holds .pyd/.dll files open.
+rem Other pythonw.exe processes (other apps) must not block the update.
+set "RUNNING=0"
+for /f "usebackq delims=" %%P in (`powershell -NoProfile -Command "(@(Get-Process pythonw -ErrorAction SilentlyContinue ^| Where-Object { $_.Path -and $_.Path.StartsWith('%DEST%') })).Count"`) do set "RUNNING=%%P"
+if not "%RUNNING%"=="0" (
+  echo [WARN] TongSheng is running from %DEST%.
+  echo        Quit it from the tray, then run apply_update.bat again.
   pause
   exit /b 3
 )
