@@ -52,6 +52,13 @@ QLabel#hint {{
     color: {MUTED};
     font-size: 12px;
 }}
+QLabel#modestatus {{
+    background: {CYAN};
+    color: {BG};
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 9px;
+}}
 QLabel#state {{
     color: {MUTED};
     padding: 4px 10px;

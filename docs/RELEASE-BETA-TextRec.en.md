@@ -13,8 +13,8 @@ A second working mode: instead of speaking, you type text — the app translates
 
 ### Mode switch
 
-- A single button sits in the header, right of **Voice model training**. Its label shows the current mode; click it to switch between *Voice input* and *Text to audio*.
-- A small caption under the button reads **Switch mode**.
+- The header (right of **Voice model training**) shows the active mode as a highlighted status chip — inverse colours, so it reads as state rather than as a control.
+- The button underneath reads **Switch mode**; clicking it toggles between *Voice input* and *Text to audio*.
 - Voice input mode keeps the original blue-tinted dark theme. Text-to-audio mode shifts the whole window to a subtle emerald dark tone, so the active mode is recognisable at a glance while staying dark.
 - The mode is remembered in `config.yaml` and restored on the next start.
 
