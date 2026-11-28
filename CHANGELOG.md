@@ -1,5 +1,19 @@
 ﻿# Changelog
 
+## beta: TongSheng-1.1.11-beta-PVVoice
+
+新增「直接使用 PrivateVoice 训练结果」：不再需要导入，同声直接把
+`PrivateVoice\characters\*` 作为音色来源读取。
+
+- 音色列表会把 PrivateVoice 的角色一起列出（显示为 `名称 · PV`，内部 id 前缀 `pv:`）
+- 选中后**原地使用**它的 GPT / SoVITS 权重与参考音频，不复制、不移动、不改 profile
+- 权重解析顺序：PrivateVoice profile 里的绝对路径 → 该角色 `checkpoints\<文件名>`；
+  路径失效也能按文件名找回
+- 参考文本自动取 `voice.reference_text` 或 `reference.txt`，语种在加载时自动判断
+- 删除保护：`pv:` 音色在音色库里不可删除（删除会连带删掉 PrivateVoice 的角色目录），
+  只提示去 PrivateVoice 管理
+- 训练出来的音色仍写入同声自己的 `voice-repository`，两套来源互不干扰
+
 ## beta r3: TongSheng-1.1.11-beta-TextRec_mode
 
 - **界面配色对调**：语音输入模式回到蓝调暗色，文字录音模式使用翠绿偏暗的底色

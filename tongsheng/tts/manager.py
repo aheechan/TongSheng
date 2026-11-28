@@ -16,7 +16,7 @@ from ..logs import get_logger
 from ..paths import ModelPaths
 from ..text import detect_language, split_sentences
 from .engine import SovitsEngine, TTSError, detect_checkpoint_version
-from .voices import VoiceProfile, VoiceStore
+from .voices import VoiceProfile, VoiceStore, make_voice_store
 
 log = get_logger("tts")
 
@@ -36,7 +36,7 @@ class TTSRuntime:
                  on_status: Callable[[str], None] | None = None) -> None:
         self.config = config
         self.models = models
-        self.store = VoiceStore(models.characters or Path("voices"))
+        self.store = make_voice_store(models)
         self.on_status = on_status or (lambda _msg: None)
         self._engines: dict[str, SovitsEngine] = {}
         self._profile: VoiceProfile | None = None

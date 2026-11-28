@@ -115,6 +115,7 @@ class ModelPaths:
     whisper_dir: Path | None = None      # .../whisper/faster-whisper-small
     funasr_dir: Path | None = None       # .../modelscope (MODELSCOPE_CACHE)
     gguf_dir: Path | None = None         # project B GGUF directory
+    private_voice: Path | None = None    # project A root (characters/ live here)
     logs: Path | None = None
     results: Path | None = None
 
@@ -181,6 +182,7 @@ def discover(private_voice: str | Path | None = None,
         whisper_dir=whisper_dir,
         funasr_dir=funasr_dir,
         gguf_dir=gguf_dir,
+        private_voice=pv,
         logs=user_root() / "logs",
         results=user_root() / "results",
     )

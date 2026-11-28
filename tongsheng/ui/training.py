@@ -167,6 +167,12 @@ class LibraryTab(QWidget):
         self._use(voice_id)
 
     def _delete(self, voice_id: str) -> None:
+        if voice_id.startswith("pv:"):
+            QMessageBox.information(
+                self, t("train.title"),
+                "这是 PrivateVoice 的音色，程序只读取不修改。\n"
+                "如需删除，请在 PrivateVoice 的角色管理里操作。")
+            return
         voice = self.service.tts.store.get(voice_id)
         if voice is None:
             return

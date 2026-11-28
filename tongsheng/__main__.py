@@ -78,10 +78,10 @@ def main(argv: list[str] | None = None) -> int:
 
 def _voices(config, args) -> int:  # noqa: ANN001
     from .paths import ModelPaths
-    from .tts.voices import VoiceStore
+    from .tts.voices import make_voice_store
 
     models = config.resolve_models()
-    store = VoiceStore(models.characters or Path("voices"))
+    store = make_voice_store(models)
     if args.action == "import":
         if not args.source:
             print("--from <PrivateVoice character folder> is required")

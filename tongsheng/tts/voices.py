@@ -112,8 +112,11 @@ class VoiceProfile:
 
 
 class VoiceStore:
-    def __init__(self, root: str | Path) -> None:
+    PV_PREFIX = "pv:"
+
+    def __init__(self, root: str | Path, external_root: str | Path | None = None) -> None:
         self.root = Path(root)
+        self.external_root = Path(external_root) if external_root else None
         self._cache: dict[str, VoiceProfile] = {}
 
     def ensure(self) -> None:
@@ -135,20 +138,52 @@ class VoiceStore:
                 continue
             profile = VoiceProfile.from_dict(data, str(path))
             profiles[profile.id] = profile
+        for profile in self._external_voices():
+            profiles.setdefault(profile.id, profile)
         self._cache = profiles
         return sorted(profiles.values(), key=lambda p: p.created_at or p.name)
 
     def get(self, voice_id: str) -> VoiceProfile | None:
         if voice_id in self._cache:
             return self._cache[voice_id]
+        if str(voice_id).startswith(self.PV_PREFIX):
+            for profile in self._external_voices():
+                if profile.id == voice_id:
+                    self._cache[voice_id] = profile
+                    return profile
+            return None
         self.list()
         return self._cache.get(voice_id)
+
+    # -- PrivateVoice characters, used in place --------------------------
+    def _external_voices(self) -> list[VoiceProfile]:
+        """Read project A's ``characters/*`` folders without copying anything."""
+        base = self.external_root
+        if base is None or not base.is_dir():
+            return []
+        found: list[VoiceProfile] = []
+        for folder in sorted(base.iterdir()):
+            if not folder.is_dir():
+                continue
+            cfg = folder / "profile.json"
+            if not cfg.exists():
+                continue
+            try:
+                data = json.loads(cfg.read_text(encoding="utf-8", errors="replace"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            profile = _profile_from_private_voice(folder, data, self.PV_PREFIX)
+            if profile is not None:
+                found.append(profile)
+        return found
 
     def first(self) -> VoiceProfile | None:
         voices = self.list()
         return voices[0] if voices else None
 
     def save(self, profile: VoiceProfile) -> Path:
+        if str(profile.id).startswith(self.PV_PREFIX):
+            raise ValueError("PrivateVoice voices are read in place and cannot be saved here")
         self.ensure()
         folder = Path(profile.dir) if profile.dir else self.root / profile.id
         folder.mkdir(parents=True, exist_ok=True)
@@ -257,3 +292,65 @@ def _short_hash(value: str) -> str:
 
 
 __all__ = ["VoiceProfile", "VoiceStore", "slugify"]
+
+
+def _resolve_private_path(folder: Path, value: str) -> str:
+    """A stores absolute paths that may not exist after moving the folder."""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    candidate = Path(raw)
+    if candidate.is_absolute() and candidate.exists():
+        return str(candidate)
+    local = folder / "checkpoints" / candidate.name
+    if local.exists():
+        return str(local)
+    return ""
+
+
+def _profile_from_private_voice(folder: Path, data: dict[str, Any],
+                                prefix: str) -> VoiceProfile | None:
+    voice = data.get("voice") if isinstance(data.get("voice"), dict) else data
+    gpt = _resolve_private_path(folder, str(voice.get("gpt_ckpt") or ""))
+    sovits = _resolve_private_path(
+        folder,
+        str(voice.get("sovits_ckpt") or voice.get("sovits_rec")
+            or voice.get("sovits_live") or ""))
+    reference = folder / "reference.wav"
+    if not reference.exists():
+        reference = folder / "dataset" / "reference.wav"
+    if not reference.exists():
+        return None
+
+    text = str(voice.get("reference_text") or "").strip()
+    if not text:
+        for name in ("reference.txt", "dataset/reference.txt"):
+            candidate = folder / name
+            if candidate.exists():
+                text = candidate.read_text(encoding="utf-8", errors="replace").strip()
+                if text:
+                    break
+
+    trained = bool(gpt and sovits)
+    return VoiceProfile(
+        id=f"{prefix}{data.get('id') or folder.name}",
+        name=str(data.get("name") or folder.name),
+        mode="finetune" if trained else "zero-shot",
+        gpt_ckpt=gpt,
+        sovits_live=sovits,
+        sovits_rec=sovits,
+        reference=str(reference),
+        reference_text=text,
+        reference_lang="",
+        created_at=str(data.get("created_at") or ""),
+        notes="PrivateVoice (live)",
+        dir=str(folder),
+    )
+
+
+def make_voice_store(models: Any) -> VoiceStore:
+    """Voice store that also exposes project A's characters in place."""
+    root = models.characters or Path("voices")
+    pv_root = getattr(models, "private_voice", None)
+    external = (Path(pv_root) / "characters") if pv_root is not None else None
+    return VoiceStore(root, external_root=external)

@@ -278,7 +278,10 @@ class MainWindow(QWidget):
         if not voices:
             self.voice_box.addItem(t("notify.no_voice"), "")
         for voice in voices:
-            self.voice_box.addItem(voice.name, voice.id)
+            label = voice.name
+            if voice.id.startswith("pv:"):
+                label = f"{voice.name}  ·  PV"
+            self.voice_box.addItem(label, voice.id)
         index = self.voice_box.findData(self.config.tts.voice)
         if index >= 0:
             self.voice_box.setCurrentIndex(index)

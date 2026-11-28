@@ -196,9 +196,9 @@ def doctor(config: AppConfig | None = None) -> int:
     except Exception as exc:  # noqa: BLE001
         print(f"gpu         : unavailable ({exc})")
 
-    from .tts.voices import VoiceStore
+    from .tts.voices import make_voice_store
 
-    store = VoiceStore(models.characters or Path("voices"))
+    store = make_voice_store(models)
     voices = store.list()
     print(f"voices      : {len(voices)}")
     for voice in voices:
