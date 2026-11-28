@@ -150,9 +150,9 @@ def main() -> int:
         return f"{path.name}, {size:.0f} KB"
 
     def voices() -> str:
-        from tongsheng.tts.voices import VoiceStore
+        from tongsheng.tts.voices import make_voice_store
 
-        store = VoiceStore(models.characters)
+        store = make_voice_store(models)
         found = store.list()
         if not found:
             raise RuntimeError("no voices installed - reinstall or import one")
