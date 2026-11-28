@@ -87,12 +87,24 @@ def _first(paths: list[Path | None]) -> Path | None:
 
 
 def default_private_voice_root() -> Path | None:
+    """Locate project A, including the common dev layout on this machine."""
     env = os.environ.get(PRIVATE_VOICE_ENV)
-    return _first([
+    home = Path(os.environ.get("USERPROFILE") or Path.home())
+    candidates: list[Path | None] = [
         Path(env) if env else None,
         ROOT.parent / "PrivateVoice",
         ROOT / "vendor" / "PrivateVoice",
-    ])
+        ROOT.parent / "PrivateVoice" / "PrivateVoice",
+        Path(r"C:\Local Repositories\PrivateVoice"),
+        Path(r"D:\Local Repositories\PrivateVoice"),
+        Path(r"D:\PrivateVoice"),
+        home / "PrivateVoice",
+    ]
+    for candidate in candidates:
+        found = _existing(candidate)
+        if found is not None and (found / "characters").is_dir():
+            return found
+    return _first(candidates)
 
 
 def default_alt_voice_root() -> Path | None:
